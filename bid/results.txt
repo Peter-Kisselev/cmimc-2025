@@ -8,3 +8,14 @@ shit_greedy.py
 | Greedy Player #1 |       4.93775 |
 +------------------+---------------+
 
+terminal_tree_search.py
+Average Game Time: 0.018231426906585694s
++------------------+---------------+
+| Player           | Average Score |
++------------------+---------------+
+| TTS Player #1    |       20.5821 |
+| Random Player #1 |        6.8695 |
+| Random Player #2 |        6.8082 |
+| Greedy Player #1 |        5.1505 |
++------------------+---------------+
+Likely does not work

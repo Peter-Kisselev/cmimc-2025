@@ -1,3 +1,4 @@
+import time
 from typing import Dict, Tuple, List, Type, Any
 from players.player import Player
 from collections import defaultdict
@@ -72,11 +73,15 @@ class BidEngine:
         scores = {player_name: 0 for player_name, player_class in player_classes}
 
         # Simulate games
+        net_time = 0
         for _ in range(num_games):
+            start_time = time.time()
             players = [(player_name, player_class(player_index=i)) for i, (player_name, player_class) in enumerate(player_classes)] # Initialize with player index
             game_scores = BidEngine.run_game(players)
             for player_name, game_score in game_scores.items():
                 scores[player_name] += game_score
+            net_time += time.time()-start_time
 
         scores = {player_name: score / num_games for player_name, score in scores.items()}
+        print(f"Average Game Time: {net_time/num_games}s")
         return BidResult(scores)
