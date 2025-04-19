@@ -11,10 +11,11 @@ class customBot(Bot):
 
     VIEW = 8
     GRID_SIZE = 512
+    DEBUG_INDEX = 5
 
     UNSEEN = 1 if DEBUG else -10000
 
-    EXPLORE = 100
+    EXPLORE = 10
 
     def rTF(self) -> bool:
         return random.choice([True, False])
@@ -132,9 +133,9 @@ class customBot(Bot):
             for j in range(len(heights[0])):
                 curPos = self.getTruePos([j - self.VIEW + self.pos[0], i - self.VIEW + self.pos[1]])
                 self.cache[curPos[1]][curPos[0]] = heights[i][j]
-        # if self.DEBUG and self.index == 1:
-        #     self.cPrint(self.pos)
-        #     self.saveCache(self.cache)
+        if self.DEBUG and self.index == self.DEBUG_INDEX:
+            # self.cPrint(self.pos)
+            self.saveCache(self.cache)
 
     # Use neighbor info
     def readNbrs(self, nbrs):
@@ -145,29 +146,43 @@ class customBot(Bot):
             bP = [self.pos[0] + rPos[0] + msg[0], self.pos[1] + rPos[1] + msg[1]]
             bH = msg[2]
             newP = self.getTruePos(bP)
-            self.cache[newP[1]][newP[0]] = bH
+            # self.cache[newP[1]][newP[0]] = bH
 
     # perform a step
     def step(self, height: np.ndarray, neighbors: List[Tuple[int, int, int]]) -> Tuple[int, int, int]:
         sign = lambda x: -1 if x < 0 else (0 if x == 0 else 1)
+
+        if self.index == self.DEBUG_INDEX:
+            self.cPrint("test")
 
         self.updateCache(height)
         self.readNbrs(neighbors)
 
         # Index of highest point in field of view
         bP = tuple([*np.unravel_index(np.argmax(self.cache), self.cache.shape)][::-1])
-        self.bestPos = [bP, self.cache[bP[1]][bP[0]]]
-
-        self.cPrint()
-        self.cPrint([int(num) for num in self.pos])
-        self.cPrint([int(num) for num in self.bestPos[0]])
-        self.cPrint(self.bestPos[1])
+        if self.cache[bP[1]][bP[0]] > self.bestPos[1]:
+            self.bestPos = [bP, self.cache[bP[1]][bP[0]]]
+        bP = self.bestPos[0]
 
         if self.TURN > self.EXPLORE:
+            if self.index == self.DEBUG_INDEX:
+                rP = self.torusRelPos(self.pos, bP)
+                self.cPrint()
+                self.cPrint(self.index)
+                self.cPrint([int(num) for num in self.pos])
+                self.cPrint([int(num) for num in self.bestPos[0]])
+                self.cPrint(self.cache[self.pos[1]][self.pos[0]])
+                self.cPrint(self.cache[bP[1]][bP[0]])
+                self.cPrint(self.bestPos[1])
+                self.cPrint(self.cache[np.unravel_index(np.argmax(self.cache), self.cache.shape)])
+                self.cPrint([int(num) for num in rP])
+
             # move towards higher points
             if self.cache[bP[1]][bP[0]] > self.cache[self.pos[1]][self.pos[0]]:
-                movex = sign(bP[0] - self.pos[0])
-                movey = sign(bP[1] - self.pos[1])
+                rP = self.torusRelPos(self.pos, bP)
+
+                movex = sign(rP[0])
+                movey = sign(rP[1])
             elif self.cache[bP[1]][bP[0]] == self.cache[self.pos[1]][self.pos[0]]:
                 movex = 0
                 movey = 0
