@@ -15,7 +15,7 @@ class customBot(Bot):
 
     UNSEEN = 1 if DEBUG else -10000
 
-    EXPLORE = 10
+    EXPLORE = 200
 
     def rTF(self) -> bool:
         return random.choice([True, False])
@@ -28,7 +28,7 @@ class customBot(Bot):
     # print big array
     def fullprint(self, arr):
         if self.DEBUG:
-            with np.printoptions(threshold=np.inf):
+            with np.printoptions(threshold=np.inf, linewidth=np.inf):
                 self.cPrint(arr)
 
     # View mapped area
@@ -59,19 +59,20 @@ class customBot(Bot):
         self.index = index
         self.difficulty = difficulty
 
-        self.cache = np.full((self.GRID_SIZE, self.GRID_SIZE), self.UNSEEN)
+        self.cache = np.full((self.GRID_SIZE, self.GRID_SIZE), self.UNSEEN, dtype=float)
         self.pos = np.array([0, 0])
 
-        self.bestPos = [[0, 0], 0]
+        self.bestPos = [[0, 0], self.UNSEEN]
 
         self.TURN = 0
 
         # pick one direction based on index
         moves = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]]
-        self.movex, self.movey = moves[index & 0x7]
+        self.movey, self.movex = moves[index & 0x7]
 
     # wraparound
     def getTruePos(self, pos) -> np.ndarray[int, int]:
+        return np.array(pos)%self.GRID_SIZE
         newPos = []
         for p in pos:
             if p < 0:
@@ -84,9 +85,9 @@ class customBot(Bot):
 
     # Relative position of points on torus grid given an "origin"
     def torusRelPos(self, origin, pos):
-        dx = ((pos[0] - origin[0] + self.GRID_SIZE//2) % self.GRID_SIZE) - self.GRID_SIZE//2
-        dy = ((pos[1] - origin[1] + self.GRID_SIZE//2) % self.GRID_SIZE) - self.GRID_SIZE//2
-        return [dx, dy]
+        dx = ((pos[1] - origin[1] + self.GRID_SIZE//2) % self.GRID_SIZE) - self.GRID_SIZE//2
+        dy = ((pos[0] - origin[0] + self.GRID_SIZE//2) % self.GRID_SIZE) - self.GRID_SIZE//2
+        return [dy, dx]
 
     # Pack binary message
     def packMsg(self, bestPos) -> int:
@@ -131,8 +132,11 @@ class customBot(Bot):
     def updateCache(self, heights):
         for i in range(len(heights)):
             for j in range(len(heights[0])):
-                curPos = self.getTruePos([j - self.VIEW + self.pos[0], i - self.VIEW + self.pos[1]])
-                self.cache[curPos[1]][curPos[0]] = heights[i][j]
+                curPos = self.getTruePos([i - self.VIEW + self.pos[0], j - self.VIEW + self.pos[1]])
+                if self.cache[tuple(curPos)] != heights[i][j] and self.cache[tuple(curPos)] != self.UNSEEN:
+                    print(self.cache[tuple(curPos)])
+                    print(heights[i][j])
+                self.cache[curPos[0]][curPos[1]] = heights[i][j]
         if self.DEBUG and self.index == self.DEBUG_INDEX:
             # self.cPrint(self.pos)
             self.saveCache(self.cache)
@@ -140,69 +144,80 @@ class customBot(Bot):
     # Use neighbor info
     def readNbrs(self, nbrs):
         for nbr in nbrs:
-            rPos = [nbr[0], nbr[1]]
+            rPos = [nbr[1], nbr[0]]
             msg = self.unpackMsg(nbr[2])
 
             bP = [self.pos[0] + rPos[0] + msg[0], self.pos[1] + rPos[1] + msg[1]]
             bH = msg[2]
             newP = self.getTruePos(bP)
-            # self.cache[newP[1]][newP[0]] = bH
+            self.cache[newP[0]][newP[1]] = bH
 
     # perform a step
     def step(self, height: np.ndarray, neighbors: List[Tuple[int, int, int]]) -> Tuple[int, int, int]:
+        height = height.transpose()
         sign = lambda x: -1 if x < 0 else (0 if x == 0 else 1)
 
-        if self.index == self.DEBUG_INDEX:
-            self.cPrint("test")
+        # if self.index == self.DEBUG_INDEX:
+        #     self.cPrint("test")
 
         self.updateCache(height)
         self.readNbrs(neighbors)
 
         # Index of highest point in field of view
-        bP = tuple([*np.unravel_index(np.argmax(self.cache), self.cache.shape)][::-1])
-        if self.cache[bP[1]][bP[0]] > self.bestPos[1]:
-            self.bestPos = [bP, self.cache[bP[1]][bP[0]]]
+        bP = np.unravel_index(np.argmax(self.cache), self.cache.shape)
+        if self.cache[bP[0]][bP[1]] > self.bestPos[1]:
+            self.bestPos = [bP, self.cache[bP[0]][bP[1]]]
         bP = self.bestPos[0]
 
+        if True or self.index == self.DEBUG_INDEX:
+            rP = self.torusRelPos(self.pos, bP)
+            # self.cPrint()
+            # # self.fullprint(height)
+            # self.cPrint(self.index)
+            # self.cPrint([int(num) for num in self.pos])
+            # self.cPrint([int(num) for num in self.bestPos[0]])
+            # self.cPrint(self.cache[self.pos[0]][self.pos[1]])
+            # self.cPrint(self.cache[bP[0]][bP[1]])
+            # self.cPrint(self.bestPos[1])
+            # self.cPrint(self.cache[np.unravel_index(np.argmax(self.cache), self.cache.shape)])
+            # self.cPrint([int(num) for num in rP])
+
         if self.TURN > self.EXPLORE:
-            if self.index == self.DEBUG_INDEX:
-                rP = self.torusRelPos(self.pos, bP)
-                self.cPrint()
-                self.cPrint(self.index)
-                self.cPrint([int(num) for num in self.pos])
-                self.cPrint([int(num) for num in self.bestPos[0]])
-                self.cPrint(self.cache[self.pos[1]][self.pos[0]])
-                self.cPrint(self.cache[bP[1]][bP[0]])
-                self.cPrint(self.bestPos[1])
-                self.cPrint(self.cache[np.unravel_index(np.argmax(self.cache), self.cache.shape)])
-                self.cPrint([int(num) for num in rP])
-
             # move towards higher points
-            if self.cache[bP[1]][bP[0]] > self.cache[self.pos[1]][self.pos[0]]:
-                rP = self.torusRelPos(self.pos, bP)
+            if self.bestPos[1] > self.cache[self.pos[0]][self.pos[1]]:
+                dy, dx = self.torusRelPos(self.pos, bP)
 
-                movex = sign(rP[0])
-                movey = sign(rP[1])
-            elif self.cache[bP[1]][bP[0]] == self.cache[self.pos[1]][self.pos[0]]:
+                movex = sign(dx)
+                movey = sign(dy)
+            elif self.bestPos[1] == self.cache[self.pos[0]][self.pos[1]]:
                 movex = 0
                 movey = 0
             else:
                 movex = self.movex
                 movey = self.movey
         else:
-            random.choice([True, False])
-            # movex = self.movex
-            # movey = self.movey
-            movex = int(self.rTF())*2-1
-            movey = int(self.rTF())*2-1
+            if random.randint(0, 10) == 0:
+                random.choice([True, False])
+                # movex = self.movex
+                # movey = self.movey
+                movex = int(self.rTF())*2-1
+                movey = int(self.rTF())*2-1
+            else:
+                movex = self.movex
+                movey = self.movey
 
-        self.pos[0] += movex
-        self.pos[1] += movey
+        self.pos[1] += movex
+        self.pos[0] += movey
+
+        self.movex = movex
+        self.movey = movey
+
         self.pos = self.getTruePos(self.pos)
 
         # bestPos
         relPos = [self.torusRelPos(self.pos, self.bestPos[0]), self.bestPos[1]]
         m = self.packMsg(relPos)
+        # m = self.bestPos[1]
 
         # Increment turn counter
         self.TURN += 1
