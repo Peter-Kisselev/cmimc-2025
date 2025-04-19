@@ -1,0 +1,682 @@
+visualizer.html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title> Archipelago Visualizer </title>
+<style>
+.main > * {
+    margin: 20px;
+}
+
+.menu {
+    display: flex;
+    justify-content: space-between;
+    max-width: 1200px;
+}
+
+</style>
+</head>
+<body>
+    <div class="main">
+    <canvas id="canvas" width="150" height="150"></canvas>
+    <div class="menu">
+        <div>
+        <button onclick="Start()">Start</button>
+        <button onclick="Stop()">Pause</button>
+        <button id="STEP" onclick="Step()">Step</button>
+        <button id="RESET" onclick="Reset()">Reset</button>
+        <button id="NEXT_TEST" onclick="NextTest()">Next Test</button>
+        </div>
+        <div>
+        <input type="range" min="-12" max="0" value="-6" id="SPEED"> </br>
+        <center><label for="SPEED"> Speed </label> </center>
+        </div>
+        <div>
+        <input type="radio" name="VIEW" id="VIEW_1" checked/>
+        <label for="VIEW_1"> Simplified View </label> </br>
+        <input type="radio" name="VIEW" id="VIEW_2" />
+        <label for="VIEW_2"> Detailed View </label>
+        </div>
+        <div>
+        <label for="INPUT_FILE"> Archipelago Program </label> 
+            <input type="file" id="INPUT_FILE" accept=".csv"> </br>
+            <label for="INPUT_TEST"> Test Cases </label> 
+            <input type="file" id="INPUT_TEST" accept=".json">
+        </div>
+    </div>
+    <div id="STATUS"></div>
+    <ul id="OUT_LIST"></ul>
+    <div id="OUT_STATUS"></div></br>
+    <div id="TEST_INPUT"></div>
+    <div id="TEST_OUTPUT"></div>
+    <details> <summary> Instructions </summary> 
+        <p>Upload Archipelago programs and test cases on the right. Test cases must contain
+            input, while output is optional. See sample test cases for reference. 
+            Execute Archipelago code with the buttons on the left. </p>
+            <p> Click on islands to watch their stack. Shift-click 
+                any square on the grid to set a break point. 
+            </p>
+    </details>
+</div>
+<script>
+
+const INPUT_FILE = document.getElementById("INPUT_FILE");
+INPUT_FILE.addEventListener("input", ReadUpload, false);
+const INPUT_TEST = document.getElementById("INPUT_TEST");
+INPUT_TEST.addEventListener("input", ReadTest, false);
+const VIEW_1 = document.getElementById("VIEW_1");
+const VIEW_2 = document.getElementById("VIEW_2");
+VIEW_1.addEventListener("click", function () {full_view = false; Draw();}, false);
+VIEW_2.addEventListener("click", function () {full_view = true; Draw();}, false);
+const SPEED = document.getElementById("SPEED");
+const STEP = document.getElementById("STEP");
+const RESET = document.getElementById("RESET");
+const STATUS = document.getElementById("STATUS");
+const TEST_INPUT = document.getElementById("TEST_OUTPUT");
+const TEST_OUTPUT = document.getElementById("TEST_INPUT");
+const OUT_STATUS = document.getElementById("OUT_STATUS");
+const OUT_LIST = document.getElementById("OUT_LIST");
+
+const CANVAS = document.getElementById("canvas");
+const context= CANVAS.getContext("2d");
+CANVAS.addEventListener('click', function(event){Click(event);}, false);
+
+const DIRECTIONS = [[1,0],[0,-1],[0,1],[-1,0]]; 
+const legal_ops = ['#','-','i','d','s','p','o','j','f','j<','j=','j>','f<','f=','f>']
+const legal_ops_opp = ['p','j','f','j<','j=','j>','f<','f=','f>']
+
+var full_view = false;
+var simulation_state = 0; // 0 for executing, 1 for complete, 2 for error
+var grid_width = 11;
+var grid_height = 6;
+var grid_num = 2;
+var grid_islands = [
+    [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+    [-1, 0, 0, 0, 0, 0, 0, 0, 0, 0,-1],
+    [-1, 0,-1,-1, 0,-1,-1,-1,-1,-1,-1],
+    [-1,-1, 2,-1,-1, 1, 1, 1,-1, 1,-1],
+    [-1, 2, 2, 2,-1, 1, 1, 1, 1, 1,-1],
+    [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1]];
+
+var grid_code = [
+    ["","","","","","","","","","","",""],
+    ["","#","#","i","#","j","p","p","o","f","",""],
+    ["","#","","","i","","","","","","",""],
+    ["","","#","","","#","j<","a","","#",""],
+    ["","#","#","#","","d","d","#","#","#",""],
+    ["","","","","","","","","","","",""]];
+var swap_grid_islands = [[]];
+var swap_grid_code = [[]];
+var grid_stack = [[], [], []];
+var grid_watch = new Array(grid_height).fill(0).map(() => new Array(grid_width).fill(0));
+var ip_cord = [1,1];
+var ip_dir = [1,0];
+var ip_lefthand = true;
+var test_cases = [{"input": [],"output": [5]}];
+var test_num = 0;
+var status_look = 0;
+
+// Synchronization Control
+// https://stackoverflow.com/questions/67762588/how-to-pause-and-resume-function-execution-in-javascript
+
+const Step = () => {
+    generatorInstance.next();
+}
+
+const state = {
+    timeoutId: 0,
+}
+
+const Start = () => {
+    if (state.timeoutId === 0) {
+        SPEED.disabled=true;
+        STEP.disabled=true;
+        RESET.disabled=true;
+        NEXT_TEST.disabled=true;
+        INPUT_FILE.disabled=true;
+        INPUT_TEST.disabled=true;
+        VIEW_1.disabled=true;
+        VIEW_2.disabled=true;
+        state.timeoutId = setInterval(() => Step(), 10 * SPEED.value * SPEED.value);
+    }
+}
+
+const Stop = () => { 
+    clearTimeout(state.timeoutId);
+    state.timeoutId = 0;
+    SPEED.disabled=false;
+    STEP.disabled=false;
+    RESET.disabled=false;
+    NEXT_TEST.disabled=false;
+    INPUT_FILE.disabled=false;
+    INPUT_TEST.disabled=false;
+    VIEW_1.disabled=false;
+    VIEW_2.disabled=false;
+}
+
+const Reset = () => {
+    OUT_STATUS.textContent = "";
+    grid_stack = [];
+    ip_cord = [1,1];
+    ip_dir = [1,0];
+    ip_lefthand = true;
+    for (var p=0; p<grid_num; p++) {
+        grid_stack.push([]);
+    }
+    var testin = test_cases[test_num].input;
+    for (var p=0; p<testin.length; p++) {
+        grid_stack[0].push(testin[p]);
+    }
+    simulation_state = 0;
+    Draw();
+}
+
+const NextTest = () => {
+    test_num += 1;
+    if (test_num == test_cases.length){
+        test_num = 0;
+    }
+    status_look = 0;
+    Reset();
+}
+
+INPUT_FILE.value = '';
+INPUT_TEST.value = '';
+Reset(); 
+
+
+function Finish() {
+
+    var testout = test_cases[test_num].output;
+    var outp = grid_stack[1];
+    if (outp.length != testout.length){
+        OUT_STATUS.textContent = "Output stack length " + outp.length.toString() + " differs with intended output stack length " + testout.length.toString() + ".";
+        return;
+    }
+    for (var i=0; i<outp.length; i++){
+        if (outp[i] != testout[i]) {
+            OUT_STATUS.textContent = "Output satck number " + outp[i].toString() + " differs with intended output stream number " + testout[i].toString() + " at position " + i.toString() + ".";
+            return;
+        }
+    }
+    OUT_STATUS.textContent = "Output agrees with intended output!";
+    return;
+}
+
+
+function in_bounds(i, j){
+    return (j >= 0) && (j < grid_width) && (i >= 0) && (i < grid_height);
+}
+
+function flip(direc) {
+    return [-direc[0], -direc[1]];
+}
+
+function add(cord, direc) {
+    return [cord[0] + direc[0], cord[1] + direc[1]];
+}
+
+function add2(cord, d1, d2){
+    return [cord[0] + d1[0] + d2[0], cord[1] + d1[1] + d2[1]];
+}
+
+function rotate(direc, flip){
+    if (ip_lefthand ^ flip) {
+        return [-direc[1], direc[0]];
+    } else {
+        return [direc[1], -direc[0]];
+    }
+}
+
+function fill(num, amt) {
+    var diff = amt - grid_stack[num].length;
+    while (diff > 0) {
+        grid_stack[num].push(0);
+        diff -= 1;
+    }
+}
+
+function get(num) {
+    var l = grid_stack[num].length;
+    if (l > 0) {
+        return grid_stack[num][l-1];
+    } else {
+        return 0;
+    }
+}
+
+function move(){
+
+    var d = ip_dir;
+    var cd = add(ip_cord, d);
+    if (grid_islands[cd[0]][cd[1]] == -1) {
+        ip_dir = rotate(d, false);
+    } else {
+        var cord = add2(ip_cord, d, rotate(d, true))
+        if (grid_islands[cord[0]][cord[1]] >= 0) {
+            ip_dir = rotate(d, true)
+            ip_cord = cord
+        } else {
+            ip_cord = add(ip_cord, d);
+        }
+    }
+}
+
+function opposite() {
+
+    var n = rotate(ip_dir, true);
+    var cord = ip_cord;
+    cord = add(cord, n)
+    while (grid_islands[cord[0]][cord[1]] == -1) {
+        cord = add(cord, n)
+        if (!in_bounds(cord[0], cord[1])) {
+            return -1;
+        }
+    }
+    return cord;
+
+}
+
+
+
+const generatorInstance = Simulate();
+
+function* Simulate() {
+
+    while (simulation_state == 0){
+
+        var op = grid_code[ip_cord[0]][ip_cord[1]];
+        var num = grid_islands[ip_cord[0]][ip_cord[1]];
+
+        if (ip_cord[0] == grid_height - 2 && ip_cord[1] == grid_width-2){
+            simulation_state = 1; 
+            Finish();
+            Stop();
+
+        } else if (op == "#" || op == "-") {
+            move();
+
+        } else if (op == "i") {
+            fill(num, 1);
+            var x = grid_stack[num].pop();
+            grid_stack[num].push(x+1);
+            move();
+
+        } else if (op == "d") {
+            fill(num, 1);
+            var x = grid_stack[num].pop();
+            grid_stack[num].push(x-1);
+            move();
+
+        } else if (op == "a") {
+            fill(num, 2);
+            var x = grid_stack[num].pop();
+            var y = grid_stack[num].pop();
+            grid_stack[num].push(x+y);
+            move();
+
+        } else if (op == "s") {
+            fill(num, 2);
+            var x = grid_stack[num].pop();
+            var y = grid_stack[num].pop();
+            grid_stack[num].push(y-x);
+            move();
+
+        } else if (op == "o") {
+            fill(num, 1);
+            var x = grid_stack[num].pop();
+            move();
+
+        } else {
+
+            var cord_opp = opposite();
+            if (cord_opp == -1) {
+                simulation_state = 2; 
+                Draw();
+                alert("Runtime Error: No opposite square");
+                Stop();
+            } else {
+
+                var num_opp = grid_islands[cord_opp[0]][cord_opp[1]];
+            
+                if (op == "p") {
+
+                    fill(num, 1);
+                    var x = grid_stack[num].pop();
+                    grid_stack[num].push(x);
+                    grid_stack[num_opp].push(x);
+                    move();
+                
+                } else {
+
+                    var conditional = false
+                    if (op == 'f' || op == 'j') {
+                        conditional = true;
+                    }
+                    else {
+                        x = get(num);
+                        y = get(num_opp);
+
+                        if (op[1] == "<") {
+                            conditional = x < y;
+                        } else if (op[1] == "=") {
+                            conditional = x == y;
+                        } else {
+                            conditional = x > y;
+                        }
+                    }
+
+                    if (conditional) {
+                        ip_cord = cord_opp;
+                        if (op[0] == "j") {
+                            ip_lefthand = !ip_lefthand;
+                        } else {
+                            ip_dir = flip(ip_dir);
+                        }
+
+                    } else {
+                        move();
+                    }
+                }
+
+            }
+
+        }
+
+        if (grid_watch[ip_cord[0]][ip_cord[1]] == 1) {
+            status_look = grid_islands[ip_cord[0]][ip_cord[1]];
+            Stop(); 
+        }
+
+        Draw();
+        yield;
+    }
+}
+
+function draw_arrow(x0, y0, x1, y1) {
+// https://stackoverflow.com/questions/808826/draw-arrow-on-canvas-tag
+    const width = 2;
+    const head_len = 4;
+    const head_angle = Math.PI / 6;
+    const angle = Math.atan2(y1 - y0, x1 - x0);
+    const ctx = context;
+    ctx.lineWidth = width;
+    x1 -= width * Math.cos(angle);
+    y1 -= width * Math.sin(angle);
+    ctx.beginPath();
+    ctx.moveTo(x0, y0);
+    ctx.lineTo(x1, y1);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.lineTo(x1, y1);
+    ctx.lineTo(x1 - head_len * Math.cos(angle - head_angle), y1 - head_len * Math.sin(angle - head_angle));
+    ctx.lineTo(x1 - head_len * Math.cos(angle + head_angle), y1 - head_len * Math.sin(angle + head_angle));
+    ctx.closePath();
+    ctx.stroke();
+    ctx.fill();
+}
+
+function grid_rectangle(i, j, color) {
+    context.strokeStyle=color;
+    context.fillStyle=color;
+    context.beginPath();
+    context.rect((j+1)*60+5,(i+1)*60+5, 50, 50);
+    context.closePath();
+    context.stroke();
+    context.fill();
+}
+
+function grid_circle(i, j, color) {
+    context.strokeStyle=color;
+    context.fillStyle=color;
+    context.beginPath();
+    context.arc((j+1)*60+44, (i+1)*60+16, 3, 0, 2 * Math.PI);
+    context.closePath();
+    context.stroke();
+    context.fill();
+}
+
+
+function grid_arrow(color){
+    context.strokeStyle=color;
+    context.fillStyle=color;
+
+    var n = rotate(ip_dir, true);
+    var centi = (ip_cord[0]+1) * 60 + 30 + 18 * n[0];
+    var centj = (ip_cord[1]+1) * 60 + 30 + 18 * n[1];
+    var li = ip_dir[0] * 22;
+    var lj = ip_dir[1] * 22;
+
+    draw_arrow(centj - lj, centi - li, centj + lj, centi + li);
+}
+
+
+function Draw() {
+    canvas.width = (grid_width + 2) * 60;
+    canvas.height = (grid_height + 2) * 60;
+    context.font = '20px Arial';
+    context.textAlign = 'center'
+
+    // islands
+    for (var i=0; i<grid_height; i++){
+        for (var j=0; j<grid_width; j++){
+            if (grid_islands[i][j] == -1) {
+                grid_rectangle(i, j, 'AliceBlue');
+            } else {
+                if (grid_islands[i][j] == status_look) {
+                    grid_rectangle(i, j, 'Khaki');
+                } else {
+                    grid_rectangle(i, j, 'Beige');
+                }
+            }
+        }
+    }
+
+    // Text
+    for (var i=0; i<grid_height; i++){
+        for (var j=0; j<grid_width; j++){
+            context.strokeStyle='black';
+            context.fillStyle='black';
+            if (full_view) {
+                context.fillText(grid_code[i][j], (j+1)*60+30, (i+1)*60+35);
+            } else {
+                if (grid_code[i][j] != "-" && grid_code[i][j] != "#") {
+                    context.fillText(grid_code[i][j], (j+1)*60+30, (i+1)*60+35);
+                }
+            }
+            if (grid_watch[i][j]){
+                grid_circle(i, j, 'orange');
+            }
+        }
+    }
+
+    context.strokeStyle='gray';
+    context.fillStyle='gray';
+    grid_arrow('red');
+
+    OUT_LIST.innerHTML = '';
+    if (status_look >= 0){
+        var isstack = grid_stack[status_look];
+        STATUS.textContent = "You are looking at island " + status_look.toString() + " with stack of length " + isstack.length.toString() + ": " + isstack.toString();
+    }
+    for (i = 0; i < grid_num; i++) {
+        let li = document.createElement('li');
+        var isstack = grid_stack[i];
+        if (i == 0) {
+            li.innerText = "Island " + i.toString() + " (input) has stack of length " + isstack.length.toString() + ": " + isstack.toString();
+        } else if (i == 1) {
+            li.innerText = "Island " + i.toString() + " (output) has stack of length " + isstack.length.toString() + ": " + isstack.toString();
+        } else {
+            li.innerText = "Island " + i.toString() + " has stack of length " + isstack.length.toString() + ": " + isstack.toString();
+        }
+        OUT_LIST.appendChild(li);
+    }
+
+
+}
+
+function Click(event) {
+    var elemLeft = CANVAS.offsetLeft + CANVAS.clientLeft, elemTop = CANVAS.offsetTop + CANVAS.clientTop; 
+    var x = event.pageX - elemLeft, y = event.pageY - elemTop;
+
+    if (event.shiftKey){
+        if (x % 60 > 5 && x % 60 < 55 && y % 60 > 5 && y % 60 < 55){
+            var row = Math.floor(y/60)-1, col = Math.floor(x/60)-1;
+            if (in_bounds(row, col) && grid_islands[row][col] != -1) {
+                if (grid_watch[row][col] == 0){
+                    grid_watch[row][col] = 1;
+                } else {
+                    grid_watch[row][col] = 0;
+                }
+                Draw();
+            }
+        }
+
+    } else {
+
+        if (x % 60 > 5 && x % 60 < 55 && y % 60 > 5 && y % 60 < 55){
+            var row = Math.floor(y/60)-1, col = Math.floor(x/60)-1;
+            if (in_bounds(row, col)){
+                status_look = grid_islands[row][col];
+                Draw();
+            } else if (row == grid_height && col == grid_width-2){
+                status_look = -1;
+                Draw();
+            }
+        }
+
+    }
+
+}
+
+function ParseError(message) {
+    alert("Compile Error: " + message);
+}
+
+function wo(i,j,ni){
+    if (swap_grid_islands[i][j] >= 0 || !legal_ops.includes(swap_grid_code[i][j])) {
+        return ni;
+    }
+    work = [[i,j]];
+    while (work.length > 0) {
+        var ab = work.pop()
+        var a = ab[0];
+        var b = ab[1];
+        if (legal_ops.includes(swap_grid_code[a][b]) && swap_grid_islands[a][b] == -1) {
+            swap_grid_islands[a][b] = ni;
+            work.push([a-1,b]);
+            work.push([a+1,b]);
+            work.push([a,b-1]);
+            work.push([a,b+1]);
+        }
+    }
+    return ni + 1
+}
+
+function ReadUpload() {
+
+    if (INPUT_FILE.files) {
+        // Read input file
+        var file = INPUT_FILE.files[0];
+        var reader = new FileReader();
+        reader.readAsText(file);
+        reader.onload = function(event) {
+
+            var csv = event.target.result;
+            var rows = csv.split(/\r?\n/);
+            if (!rows[rows.length-1]){
+                rows.pop();
+            }
+
+            // Set up swap variables
+            var swap_grid_height = rows.length;
+            var swap_grid_width = (rows[0].split(',')).length;
+
+            swap_grid_code = Array.from(Array(swap_grid_height), _ => Array(swap_grid_width).fill(""));
+            swap_grid_islands = Array.from(Array(swap_grid_height), _ => Array(swap_grid_width).fill(-1));
+
+            for (var i=0; i<swap_grid_height; i++){
+
+                cols = rows[i].split(',');
+                if (cols.length != swap_grid_width) {
+                    ParseError("Inconsistent row length");
+                    return;
+                }    
+                for (var j=0; j<swap_grid_width; j++){
+                    swap_grid_islands[i][j] = -1;
+                    if (i == 0 || i == swap_grid_height - 1 || j == 0 || j == swap_grid_width) {
+                        swap_grid_code[i][j] = "";
+                    } else {
+                        if (legal_ops.includes(cols[j])) {
+                            swap_grid_code[i][j] = cols[j];
+                        } else {
+                            swap_grid_code[i][j] = "";
+                        }
+                    }
+                }
+            }
+
+            if (swap_grid_height < 4 || swap_grid_width < 4 || swap_grid_height >= 512 || swap_grid_width >= 512){
+                ParseError("Invalid program size");
+                return;
+            }
+
+            var ni = 0;
+            ni = wo(1, 1, ni);
+            ni = wo(swap_grid_height - 2, swap_grid_width - 2, ni);
+
+            if (ni < 2) {
+                ParseError("Missing input and output islands");
+                return;
+            }
+            for (var i=0; i<swap_grid_height-1; i++) {
+                for (var j=0; j<swap_grid_height-1; j++) {
+                    ni = wo(i, j, ni);
+                }
+            }
+
+            // Update variables
+            grid_width = swap_grid_width;
+            grid_height = swap_grid_height;
+            grid_code = swap_grid_code;
+            grid_islands = swap_grid_islands;
+            grid_num = ni;
+            grid_watch = new Array(grid_height).fill(0).map(() => new Array(grid_width).fill(0));
+            status_look = -1;
+
+            test_cases = [{"input": [],"instream": []}];
+            test_num = 0;
+            INPUT_TEST.value = '';
+            Reset(); 
+            Draw();
+        }
+    }
+}
+
+function ReadTest() {
+
+    if (INPUT_TEST.files) {
+        // Read input file
+        var file = INPUT_TEST.files[0];
+        var reader = new FileReader();
+        reader.readAsText(file);
+        reader.onload = function(event) {
+            var swap_test_cases = JSON.parse(JSON.stringify(JSON.parse(event.target.result)));
+            for (var i=0; i<swap_test_cases; i++){
+                if (!swap_test_cases[i].hasOwnProperty("input")) {
+                    alert("Read Test Case Error: Missing input");
+                    return;
+                }
+            }
+            test_cases = swap_test_cases;
+            test_num = 0;
+            Reset();
+            Draw();
+        }
+    }
+}
+
+</script>
+</body>
+</html>
