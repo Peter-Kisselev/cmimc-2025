@@ -73,15 +73,6 @@ class customBot(Bot):
     # wraparound
     def getTruePos(self, pos) -> np.ndarray[int, int]:
         return np.array(pos)%self.GRID_SIZE
-        newPos = []
-        for p in pos:
-            if p < 0:
-                newPos.append(self.GRID_SIZE + p)
-            elif p >= self.GRID_SIZE:
-                newPos.append(p - self.GRID_SIZE)
-            else:
-                newPos.append(p)
-        return np.array(newPos)
 
     # Relative position of points on torus grid given an "origin"
     def torusRelPos(self, origin, pos):
@@ -133,9 +124,9 @@ class customBot(Bot):
         for i in range(len(heights)):
             for j in range(len(heights[0])):
                 curPos = self.getTruePos([i - self.VIEW + self.pos[0], j - self.VIEW + self.pos[1]])
-                if self.cache[tuple(curPos)] != heights[i][j] and self.cache[tuple(curPos)] != self.UNSEEN:
-                    print(self.cache[tuple(curPos)])
-                    print(heights[i][j])
+                # if self.cache[tuple(curPos)] != heights[i][j] and self.cache[tuple(curPos)] != self.UNSEEN:
+                #     print(self.cache[tuple(curPos)])
+                #     print(heights[i][j])
                 self.cache[curPos[0]][curPos[1]] = heights[i][j]
         if self.DEBUG and self.index == self.DEBUG_INDEX:
             # self.cPrint(self.pos)
