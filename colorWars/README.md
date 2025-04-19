@@ -1,17 +1,23 @@
-# Flood Survival Starter Code
+# Color Wars Starter Code
 
 ## Directory Structure
 
 ```
-flood_survival/
-├── config.py                 # Configure bot, difficulty, seed, and grid size
-├── engine.py                 # Core simulation engine
-├── cli.py                    # CLI for running simulations
-├── submission.py             # Template for your submission bot
-├── visualizer.py             # Pygame-based simulation visualizer
-├── bots/
-│   ├── bot.py                # Abstract bot class (base implementation)
-│── └── basic.py              # Example bot implementation
+color_wars/
+├── config.py                 # Configure players, grid size, and game count
+├── engine.py                 # Core game logic
+├── players/                  # Player implementations
+│   ├── player.py             # Base Player abstract class
+│   ├── random.py             # Example random player
+│   └── stupid.py             # Example minimal player
+├── visualizers/              # Visualization tools
+│   ├── abstract.py           # Abstract visualizer class
+│   ├── ascii_visualizer.py   # ASCII visualization backend
+│   ├── image_visualizer.py   # GIF visualization backend
+│   └── feedback_visualizer.py# Adapter for grader feedback JSON
+├── submission.py             # Template for your submission
+├── cli.py                    # CLI utility for running and visualizing games
+└── debug.log                 # Debug logs appear here
 ├── requirements.txt          # Python dependencies
 ```
 
@@ -29,43 +35,62 @@ flood_survival/
 
 ## Local Testing
 
-### Step 1: Implement Your Bot
-- Create a new bot by subclassing the `Bot` abstract class located in `bots/bot.py`.
-- Implement your bot's strategy in the `step()` method, handling inputs:
-  - `height`: Local grid elevations.
-  - `neighbors`: Positions and messages of nearby bots.
-- Check `bots/basic.py` for a working example.
+### Step 1: Implement Your Player
+- Create a new player by subclassing the `Player` class (`players/player.py`) inside the `players` directory.
+- See provided examples: `players/random.py` and `players/stupid.py`.
 
-### Step 2: Configure the Simulation
-- Open `config.py` and set:
-  - Your bot class (e.g., `from bots.basic import BasicBot`).
-  - Difficulty (`difficulty`: `0`=Easy, `1`=Medium, `2`=Hard).
-  - Random seed (`seed`) for consistent simulations.
+### Step 2: Configure the Game
+- Open `config.py`:
+  - Add your player class to `player_classes`.
+  - Set the grid size (`grid_size`) and number of games (`num_games`).
 
-### Step 3: Run Your Simulation
-Run via CLI:
+### Step 3: Run the Game
+Use the CLI:
 
 ```bash
 python cli.py run
 ```
 
-This will execute your configured bot and print results directly to the terminal.
+This runs the configured players, displaying results in the terminal.
 
-Visualize via CLI:
+#### CLI Parameters
+
+The `run` command supports the following options:
+
+- `-c`, `--config` *(default: "config.py")*: Path to the configuration file or module.
+- `-o`, `--output`: Optional path to save the raw JSON scores.
+- `-m`, `--me` *(default: 0)*: Index of your player in the `player_classes` list (used for highlighting).
+- `-f`, `--feedback` *(default: "feedback.json")*: Path to write feedback JSON for visualization.
+
+Example usage:
+
 ```bash
-python cli.py visualize
+python cli.py run --config my_config.py --output scores.json --me 2 --feedback my_feedback.json
 ```
-This will display a step-by-step animation of your bot navigating the flood simulation. Each bot displays their message as a number above its icon. You can customize the display via `format_message` in `config.py`.
 
-## Submission Preparation
+## Visualization
+
+To visualize game states from grader feedback JSON:
+
+```bash
+python cli.py visualize <path_to_feedback.json> [-v ascii|image]
+```
+
+- Default visualization: `ascii`.
+- Image visualization (`image`) generates an animated GIF.
+
+## Submission
 
 ### Prepare Your Submission
-- Implement your bot logic in `submission.py` within the `SubmissionBot` class.
+- Edit `submission.py` and implement your logic in the `SubmissionPlayer` class.
 - **Important Submission Rules:**
-  - Do not change the class name (`SubmissionBot`).
-  - Do not modify provided execution code.
-  - Do not use `print()` statements.
+  - Keep the class name as `SubmissionPlayer`.
+  - Avoid using `print()` statements.
+  - Leave provided execution code unchanged.
 
-### Submit Your Bot
-- Submit **only** the completed `submission.py` file to the contest submission platform.
+### Debugging Your Submission
+- Use Python's `logging.debug()` instead of `print`.
+- Debug statements are recorded in `debug.log`.
 
+### Submit Your Player
+- Upload only your completed `submission.py` file to the contest website.

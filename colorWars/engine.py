@@ -1,202 +1,139 @@
-from typing import List, Tuple, Type
-from bots.bot import Bot
-from scipy.interpolate import RegularGridInterpolator
-import numpy as np
+from typing import Type, List, Tuple, Dict, Any
+from players.player import Player
+import copy
+import json
 
-class FloodResult:
-    def __init__(self, num_alive: int, difficulty: int, seed: int):
-        self.num_alive = num_alive
-        self.difficulty = difficulty
-        self.seed = seed
+class ColorWarsResult:
+    def __init__(self, scores: Dict[str, float]):
+        self.scores = scores
 
     def print_result(self) -> None:
-        difficulty_strings = ["Easy", "Medium", "Hard"]
-        difficulty_string = difficulty_strings[self.difficulty]
-        print(f"Number of Bots Alive on Difficulty {difficulty_string}, Seed {self.seed}: {self.num_alive}")
+        header_player = "Player"
+        header_score = "Score"
 
-class FloodSimulator:
-    @staticmethod
-    def _generate_cubic(coarse_size: int, fine_size: int) -> np.ndarray:
-        pad = 3
-        padded_size = coarse_size + pad
+        player_col_width = max(len(header_player),
+                              max(len(player) for player in self.scores))
+        score_strings = [f"{v:.4f}" for v in self.scores.values()]
+        score_col_width = max(len(header_score),
+                              max(len(s) for s in score_strings))
 
-        coarse_grid = np.random.rand(padded_size, padded_size)
-        coarse_grid[coarse_size:coarse_size+pad, :] = coarse_grid[0:pad, :]
-        coarse_grid[:, coarse_size:coarse_size+pad] = coarse_grid[:, 0:pad]
-
-        coord_coarse = np.linspace(
-            -1.0 / coarse_size,
-            1.0 + 1.0 / coarse_size,
-            padded_size
+        border = (
+            f"+{'-' * (player_col_width + 2)}+"
+            f"{'-' * (score_col_width + 2)}+"
         )
 
-        coord_fine = np.linspace(0.0, 1.0, fine_size, endpoint=False)
-        grid_x, grid_y = np.meshgrid(coord_fine, coord_fine)
-        sample_pts = np.column_stack((grid_x.ravel(), grid_y.ravel()))
+        def make_row(col1: str, col2: str) -> str:
+            return (
+                f"| {col1.ljust(player_col_width)} "
+                f"| {col2.rjust(score_col_width)} |"
+            )
 
-        interpolator = RegularGridInterpolator(
-            (coord_coarse, coord_coarse),
-            coarse_grid,
-            method='cubic'
-        )
-        fine_grid = interpolator(sample_pts).reshape(fine_size, fine_size)
+        print(border)
+        print(make_row(header_player.center(player_col_width),
+                       header_score.center(score_col_width)))
+        print(border)
 
-        min_val, max_val = fine_grid.min(), fine_grid.max()
-        normalized = (fine_grid - min_val) / (max_val - min_val)
+        for player, score in sorted(self.scores.items(),
+                                   key=lambda kv: kv[1],
+                                   reverse=True):
+            print(make_row(player, f"{score:.4f}"))
 
-        return normalized
+        print(border)
+
+class ColorWarsEngine:
+    @staticmethod
+    def run_game(players: List[Tuple[str, Player]], grid_size: int) -> Tuple[Dict[str, float], List[Dict[str, Any]]]:
+        num_players = len(players)
+        dirs = [(-1, 0), (1, 0), (0, -1), (0, 1)]
+
+        player_bits = [2 ** i for i in range(num_players)]
+
+        is_valid_cell = lambda x, y: 0 <= x < grid_size and 0 <= y < grid_size
+
+        time = 0
+        board = [[0] * grid_size for _ in range(grid_size)]
+        board_times = [[-1] * grid_size for _ in range(grid_size)]
+        history = []
+        turns = []
+
+        scores = [0.] * num_players
+        while True:
+            time += 1
+            moves = [None] * num_players
+            temp_board = copy.deepcopy(board)
+            temp_history = copy.deepcopy(history)
+            all_pass = True
+            for i in range(num_players):
+                move = players[i][1].play(temp_board, temp_history)
+
+                x, y = move
+                if not is_valid_cell(x, y) or (board_times[x][y] != time and board_times[x][y] != -1):
+                    raise ValueError(f"Invalid move {move} made by {players[i][0]}.")
+
+                moves[i] = move
+                board[x][y] |= player_bits[i]
+                board_times[x][y] = time
+                all_pass = False
+            history.append(moves)
+            turns.append({"time": time, "allMoves": moves})
+
+            temp_board = copy.deepcopy(board)
+            empty_cells = 0
+            scores = [0.] * num_players
+            for x in range(grid_size):
+                for y in range(grid_size):
+                    if temp_board[x][y] == 0:
+                        color = 0
+                        for dx, dy in dirs:
+                            nx, ny = x + dx, y + dy
+                            if not is_valid_cell(nx, ny) or temp_board[nx][ny] not in player_bits:
+                                continue
+                            color |= temp_board[nx][ny]
+                        if color == 0:
+                            empty_cells += 1
+                        else:
+                            board[x][y] = color
+                            board_times[x][y] = time
+                    k = bin(board[x][y]).count("1")
+                    for i in range(num_players):
+                        if (board[x][y] >> i) & 1 == 1:
+                            scores[i] += 1 / k
+
+            if empty_cells == 0 or all_pass:
+                break
+
+        scores = {player_name: scores[i] / (grid_size ** 2) for i, (player_name, _) in enumerate(players)}
+        return scores, turns
 
     @staticmethod
-    def _generate_easy(grid_size: int) -> np.ndarray:
-        base_noise = FloodSimulator._generate_cubic(16, grid_size) - 0.1
-        terrain = np.copy(base_noise)
-        terrain[base_noise < 0.] *= 5000.
-        terrain[base_noise > 0.] *= 200.
-        terrain += 500
-        return terrain + FloodSimulator._generate_cubic(64, grid_size) * 50.
+    def grade(player_classes: List[Tuple[str, Type[Player]]], grid_size: int, num_games: int, my_index: int = 0, feedback_out: str = "feedback.json") -> ColorWarsResult:
+        scores = {player_name: 0 for player_name, _ in player_classes}
+        num_players = len(player_classes)
 
-    @staticmethod
-    def _generate_medium(grid_size: int) -> np.ndarray:
-        num_blobs = 8
+        feedback = {
+            "feedback": {
+                "meta": {
+                    "gridSize": grid_size,
+                    "numPlayers": num_players,
+                    "playerIndex": my_index,
+                },
+                "games": []
+            }
+        }
 
-        blob_heights = np.sqrt(np.random.rand(num_blobs, num_blobs)) * 700.
+        # Simulate games
+        for _ in range(num_games):
+            players = [(player_name, player_class(player_index=i, grid_size=grid_size, num_players=num_players)) for i, (player_name, player_class) in enumerate(player_classes)]
 
-        repeat_factor = grid_size // num_blobs
-        upsampled_blobs = np.repeat(blob_heights, repeat_factor, 0)
-        upsampled_blobs = np.repeat(upsampled_blobs, repeat_factor, 1)
+            game_scores, turns = ColorWarsEngine.run_game(players, grid_size)
 
-        mid_noise = FloodSimulator._generate_cubic(64, grid_size) * 200.
+            feedback["feedback"]["games"].append({"turns": turns})
 
-        terrain = upsampled_blobs + mid_noise
-        return terrain
+            for player_name, game_score in game_scores.items():
+                scores[player_name] += game_score
+                
+        with open(feedback_out, 'w') as f:
+            f.write(json.dumps(feedback, indent=2))
 
-    @staticmethod
-    def _generate_hard(grid_size: int) -> np.ndarray:
-        base_noise = FloodSimulator._generate_cubic(16, grid_size) - 0.15
-
-        terrain = base_noise.copy()
-        terrain[base_noise < 0.] *= 5000.
-        terrain[base_noise > 0.] *= 200.
-        terrain += 750
-
-        detail_noise = FloodSimulator._generate_cubic(64, grid_size)
-        terrain += detail_noise * 50.
-
-        weights = 68. * np.random.rand(8) + 30.
-        offsets = (weights / weights.sum() * grid_size).cumsum().astype(int)
-        np.random.shuffle(offsets)
-        y0 = np.random.randint(0, grid_size)
-
-        for ridge_index, offset in enumerate(offsets, start=1):
-            center_x = np.random.randint(0, grid_size)
-            center_y = y0 + offset
-
-            cap_height = ridge_index * 100. - 50.
-
-            for dy in range(-1, 1 + 1):
-                y = (center_y + dy) % grid_size
-                xs = (np.arange(center_x - 200, center_x + 200 + 1) % grid_size)
-                terrain[xs, y] = np.minimum(cap_height, terrain[xs, y])
-
-        return terrain
-
-    def initialize(self, bot: Type[Bot], difficulty: int, seed: int, grid_size: int = 512, view_radius: int = 8, message_len: int = 32, num_bots: int = 64) -> None:
-        self.grid_size = grid_size
-        self.view_radius = view_radius
-        self.message_len = message_len
-        self.num_bots = num_bots
-
-        np.random.seed(seed)
-        self.flood_height = 0.
-
-        self.terrain = None
-        if difficulty == 0:
-            self.terrain = self._generate_easy(grid_size)
-        elif difficulty == 1:
-            self.terrain = self._generate_medium(grid_size)
-        elif difficulty == 2:
-            self.terrain = self._generate_hard(grid_size)
-        else:
-            raise ValueError(f"Invalid difficulty {difficulty}.")
-        self.terrain_padded = np.pad(self.terrain, view_radius, mode="wrap")
-
-        self.max_height = np.max(self.terrain)
-
-        self.num_alive = num_bots
-        self.is_alive = [True] * num_bots
-
-        self.bots = [bot(i, difficulty) for i in range(num_bots)]
-        self.positions = [(np.random.randint(0, grid_size), np.random.randint(0, grid_size)) for _ in range(num_bots)]
-        self.messages = [0] * num_bots
-
-    def step(self) -> bool:
-        nxt_positions = [None for _ in range(self.num_bots)]
-        nxt_messages = [0 for _ in range(self.num_bots)]
-        for i in range(self.num_bots):
-            if self.is_alive[i]:
-                x, y = self.positions[i]
-
-                height = self.terrain_padded[x:x+2*self.view_radius+1, y:y+2*self.view_radius+1]
-                neighbors = []
-
-                for j in range(self.num_bots):
-                    if self.is_alive[j]:
-                        w, z = self.positions[j]
-                        dx, dy = w - x, z - y
-
-                        half = self.grid_size // 2
-
-                        if dx > half:
-                            dx -= self.grid_size
-                        elif dx < -half:
-                            dx += self.grid_size
-
-                        if dy > half:
-                            dy -= self.grid_size
-                        elif dy < -half:
-                            dy += self.grid_size
-
-                        if abs(dx) <= self.view_radius and abs(dy) <= self.view_radius:
-                            neighbors.append((dx, dy, self.messages[j]))
-
-                dx, dy, new_message = self.bots[i].step(height, neighbors)
-
-                if abs(dx) > 1:
-                    raise ValueError(f"Step {dx} too large.")
-                if abs(dy) > 1:
-                    raise ValueError(f"Step {dy} too large.")
-                if new_message < 0 or new_message >= (1 << self.message_len):
-                    raise ValueError(f"Message {nm} does not abide to constraints.")
-
-                nxt_positions[i] = ((x + dx) % self.grid_size, (y + dy) % self.grid_size)
-                nxt_messages[i] = new_message
-
-        self.flood_height += 1.0
-        if self.flood_height > self.max_height:
-            self.flood_height = self.max_height
-
-        for i in range(self.num_bots):
-            if self.is_alive[i]:
-                nx, ny = nxt_positions[i]
-                if self.terrain[nx, ny] < self.flood_height:
-                    self.is_alive[i] = False
-                    self.num_alive -= 1
-                else:
-                    self.positions[i] = nxt_positions[i]
-                    self.messages[i] = nxt_messages[i]
-
-        if self.flood_height >= self.max_height or self.num_alive <= 0:
-            return True
-        return False
-
-class FloodEngine:
-    def grade(self, bot: Type[Bot], difficulty: int, seed: int, grid_size: int = 512, view_radius: int = 8, message_len: int = 32, num_bots: int = 64) -> FloodResult:
-        simulator = FloodSimulator()
-        simulator.initialize(bot, difficulty, seed, grid_size, view_radius, message_len, num_bots)
-
-        stop = False
-        while not stop:
-            stop = simulator.step()
-        num_alive = simulator.num_alive
-
-        return FloodResult(num_alive, difficulty, seed)
+        scores = {player_name: score / num_games for player_name, score in scores.items()}
+        return ColorWarsResult(scores)
