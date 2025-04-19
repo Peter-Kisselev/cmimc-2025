@@ -1,17 +1,8 @@
 from players.player import Player
 from typing import List
 import random
-import json
-import logging
 
-logging.basicConfig(
-    filename='debug.log',
-    level=logging.DEBUG,
-    format='%(asctime)s %(levelname)s: %(message)s'
-)
-
-# Don't change the name of this class when you submit!
-class SubmissionPlayer(Player):
+class MiddleScorePlayer(Player):
     def __init__(self, player_index: int):
         self.player_index = player_index
         self.my_cards = set(range(1, 16))
@@ -60,5 +51,3 @@ class SubmissionPlayer(Player):
             for i in range(4):
                 if player_history[i][-1] == winning_bid:
                     self.scores[i]+=self.previous_auctions[-1]
-
-
