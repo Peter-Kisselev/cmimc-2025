@@ -1,17 +1,8 @@
 from players.player import Player
 from typing import List
 import random
-import json
-import logging
 
-logging.basicConfig(
-    filename='debug.log',
-    level=logging.DEBUG,
-    format='%(asctime)s %(levelname)s: %(message)s'
-)
-
-# Don't change the name of this class when you submit!
-class SubmissionPlayer(Player):
+class BasePlayer(Player):
     def __init__(self, player_index: int):
         self.player_index = player_index
         self.my_cards = set(range(1, 16))
@@ -19,25 +10,14 @@ class SubmissionPlayer(Player):
         self.previous_auctions = []
         self.remaining_auctions = set(range(1,11))|set(range(-5,0))
         self.scores = [0]*4
-        middle = [-5, -4, 4, 5, 6, 3, 7]
-        cards = [15, 14, 13, 12, 11, 10, 9]
-        for card in cards:
-            self.my_cards.remove(card)
-        random.shuffle(cards)
-        self.oto = {middle[i]:cards[i] for i in range(7)}
+
     def play(self, score_card: int, player_history: List[List[int]]) -> int:
         self.update_vars(player_history)
-        # print(self.scores)
-        # CODE BEGINS
-        ret = None # This is the choice
-        if (score_card in self.oto):
-            ret = self.oto[score_card]
-        else:
-            ret = random.choice(list(self.my_cards))
-            self.my_cards.remove(ret)
+        ret = random.choice(list(self.my_cards))
+        self.my_cards.remove(ret)
 
-        # CODE ENDS
         self.previous_auctions.append(score_card)
+        self.remaining_auctions.remove(score_card)
         return ret
 
     def update_vars(self, player_history):
@@ -60,5 +40,3 @@ class SubmissionPlayer(Player):
             for i in range(4):
                 if player_history[i][-1] == winning_bid:
                     self.scores[i]+=self.previous_auctions[-1]
-
-
