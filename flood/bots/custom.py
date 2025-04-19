@@ -49,8 +49,8 @@ class customBot(Bot):
             # Step 2: Q2  <-> Q3
             newArr[256:512, 0:256] = Q2  # Q3 becomes Q2
             newArr[0:256, 256:512] = Q3  # Q2 becomes Q3
-            np.savetxt("flood/cache.txt", arr, delimiter=",", fmt="%3d")
-            np.savetxt("flood/cacheResown.txt", newArr, delimiter=",", fmt="%3d")
+            np.savetxt("flood/data/cache.txt", arr, delimiter=",", fmt="%3d")
+            np.savetxt("flood/data/cacheResown.txt", newArr, delimiter=",", fmt="%3d")
 
     # initialize class
     def __init__(self, index: int, difficulty: int):
