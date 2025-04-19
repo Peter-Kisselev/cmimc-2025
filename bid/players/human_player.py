@@ -2,7 +2,7 @@ from players.player import Player
 from typing import List
 import random
 
-class BasePlayer(Player):
+class HumanInputPlayer(Player):
     def __init__(self, player_index: int):
         self.player_index = player_index
         self.my_cards = set(range(1, 16))
@@ -10,16 +10,15 @@ class BasePlayer(Player):
         self.previous_auctions = []
         self.remaining_auctions = set(range(1,11))|set(range(-5,0))
         self.scores = [0]*4
-
     def play(self, score_card: int, player_history: List[List[int]]) -> int:
         self.update_vars(player_history)
-        # BEGIN
-
-        ret = random.choice(list(self.my_cards))
-        self.my_cards.remove(ret)
-
-
-        # END
+        # CODE BEGINS
+        print(" ".join(str(player_history[i][-1]) for i in range(4)))
+        print(f"score_card: {score_card}")
+        print("----")
+        print("\n".join(map(str, self.opponent_cards)))
+        ret = int(input())
+        # CODE ENDS
         self.previous_auctions.append(score_card)
         self.my_cards.remove(ret)
         return ret

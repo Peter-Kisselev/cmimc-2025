@@ -65,7 +65,7 @@ class BidEngine:
                 winner_index = bids.index(unique_bids[0])
 
             scores[players[winner_index][0]] += score_card
-
+            print(f"Current Scores: {scores}")
         return scores
 
     @staticmethod
@@ -78,6 +78,7 @@ class BidEngine:
             start_time = time.time()
             players = [(player_name, player_class(player_index=i)) for i, (player_name, player_class) in enumerate(player_classes)] # Initialize with player index
             game_scores = BidEngine.run_game(players)
+            max_winning = -int(1e9)
             for player_name, game_score in game_scores.items():
                 scores[player_name] += game_score
             net_time += time.time()-start_time
