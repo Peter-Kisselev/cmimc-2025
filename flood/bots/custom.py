@@ -7,36 +7,46 @@ import numpy as np
 class customBot(Bot):
     DEBUG = True
 
+    ### COPY BELOW THIS LINE TO AVOID DEBUG ERRORS ###
+
     VIEW = 8
     GRID_SIZE = 512
 
     UNSEEN = 1 if DEBUG else 10000
+    # print only on debug
+    def cPrint(self, val):
+        if self.DEBUG:
+            print(val)
 
+    # print big array
     def fullprint(self, arr):
-        with np.printoptions(threshold=np.inf):
-            print(arr)
+        if self.DEBUG:
+            with np.printoptions(threshold=np.inf):
+                self.cPrint(arr)
 
     # View mapped area
     def saveCache(self, arr):
-        # Copy to avoid modifying original
-        newArr = arr.copy()
+        if self.DEBUG:
+            # Copy to avoid modifying original
+            newArr = arr.copy()
 
-        # Define quadrants
-        Q1 = arr[0:256, 0:256]
-        Q2 = arr[0:256, 256:512]
-        Q3 = arr[256:512, 0:256]
-        Q4 = arr[256:512, 256:512]
+            # Define quadrants
+            Q1 = arr[0:256, 0:256]
+            Q2 = arr[0:256, 256:512]
+            Q3 = arr[256:512, 0:256]
+            Q4 = arr[256:512, 256:512]
 
-        # Step 1: Q1 <-> Q4
-        newArr[0:256, 0:256] = Q4  # Q1 becomes Q4
-        newArr[256:512, 256:512] = Q1  # Q4 becomes Q2
+            # Step 1: Q1 <-> Q4
+            newArr[0:256, 0:256] = Q4  # Q1 becomes Q4
+            newArr[256:512, 256:512] = Q1  # Q4 becomes Q2
 
-        # Step 2: Q2  <-> Q3
-        newArr[256:512, 0:256] = Q2  # Q3 becomes Q2
-        newArr[0:256, 256:512] = Q3  # Q2 becomes Q3
-        np.savetxt("/flood/cache.txt", arr, delimiter=",", fmt="%3d")
-        np.savetxt("flood/cacheResown.txt", newArr, delimiter=",", fmt="%3d")
+            # Step 2: Q2  <-> Q3
+            newArr[256:512, 0:256] = Q2  # Q3 becomes Q2
+            newArr[0:256, 256:512] = Q3  # Q2 becomes Q3
+            np.savetxt("flood/cache.txt", arr, delimiter=",", fmt="%3d")
+            np.savetxt("flood/cacheResown.txt", newArr, delimiter=",", fmt="%3d")
 
+    # initialize class
     def __init__(self, index: int, difficulty: int):
 
         self.index = index
@@ -49,6 +59,7 @@ class customBot(Bot):
         moves = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]]
         self.movex, self.movey = moves[index & 0x7]
 
+    # wraparound
     def getTruePos(self, pos) -> np.ndarray[int, int]:
         newPos = []
         for p in pos:
@@ -60,18 +71,17 @@ class customBot(Bot):
                 newPos.append(p)
         return np.array(newPos)
 
+    # update "map"
     def updateCache(self, heights):
         for i in range(len(heights)):
             for j in range(len(heights[0])):
                 curPos = self.getTruePos([j - self.VIEW + self.pos[0], i - self.VIEW + self.pos[1]])
-                if self.index == 1:
-                    print(curPos)
                 self.cache[curPos[1]][curPos[0]] = heights[i][j]
         if self.DEBUG and self.index == 1:
-            print(self.pos)
+            self.cPrint(self.pos)
             self.saveCache(self.cache)
-            # self.fullprint(self.cache)
 
+    # perform a step
     def step(self, height: np.ndarray, neighbors: List[Tuple[int, int, int]]) -> Tuple[int, int, int]:
         sign = lambda x: -1 if x < 0 else (0 if x == 0 else 1)
         self.updateCache(height)

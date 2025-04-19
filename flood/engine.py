@@ -166,7 +166,7 @@ class FloodSimulator:
                 if abs(dy) > 1:
                     raise ValueError(f"Step {dy} too large.")
                 if new_message < 0 or new_message >= (1 << self.message_len):
-                    raise ValueError(f"Message {nm} does not abide to constraints.")
+                    raise ValueError(f"Message {new_message} does not abide to constraints.")
 
                 nxt_positions[i] = ((x + dx) % self.grid_size, (y + dy) % self.grid_size)
                 nxt_messages[i] = new_message

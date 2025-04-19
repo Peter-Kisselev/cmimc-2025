@@ -6,6 +6,10 @@ import numpy as np
 view_radius = 8
 
 class SubmissionBot(Bot):
+    DEBUG = False
+    
+    ### PASTE BELOW THIS LINE TO AVOID DEBUG ERRORS ###
+
     def __init__(self, index: int, difficulty: int):
         self.index = index
         self.difficulty = difficulty
