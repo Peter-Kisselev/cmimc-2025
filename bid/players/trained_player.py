@@ -12,18 +12,23 @@ class BasePlayer(Player):
         self.remaining_auctions = set(range(1,11))|set(range(-5,0))
         self.scores = [0]*4
 
+
+
     def play(self, score_card: int, player_history: List[List[int]]) -> int:
         self.update_vars(player_history)
         self.remaining_auctions.remove(score_card)
         # BEGIN
 
-        ret = random.choice(list(self.my_cards))
+
+
+
 
         # END
         self.previous_auctions.append(score_card)
         self.my_cards.remove(ret)
         return ret
 
+    def evaluate_position(self, player_cards: List[set[int]]):
     def update_vars(self, player_history):
         if not player_history[0]: return
         bids = [0]*16

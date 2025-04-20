@@ -61,7 +61,7 @@ class SubmissionPlayer(Player):
 
                         max_dist = max(max_dist, distance[bfs[-1]])
 
-        if (len(distance_points) == 1):
-            return random.choice(distance_points[max_dist])
-        else:
-            return random.choice(distance_points[max_dist]+distance_points[max_dist-1])
+        # if (len(distance_points) == 1):
+        return random.choice(distance_points[max_dist])
+        # else:
+        #     return random.choice(distance_points[max_dist]+distance_points[max_dist-1])
