@@ -129,6 +129,8 @@ class FloodVisualizer:
 
             box = terrain[startx:startx+length, starty:starty+length]
             c = self.tocolor(box, simulator.flood_height / simulator.max_height)
+            peak_mask = (box == 1)
+            c[peak_mask] = np.array([255, 255, 255], dtype=np.uint8)
 
             cc = c.repeat(INTSCALE, 0).repeat(INTSCALE, 1)
             padx = max(self.RES - cc.shape[0], 0)
