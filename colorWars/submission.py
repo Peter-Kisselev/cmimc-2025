@@ -41,7 +41,8 @@ class SubmissionPlayer(Player):
             distance[p] = 0
 
         bfs_ptr = 0
-        max_dist = (-1*int(1e9), (-1,-1))
+        distance_points = {}
+        max_dist = 0
         while (bfs_ptr < len(bfs)):
             top = bfs[bfs_ptr]
             bfs_ptr+=1
@@ -53,6 +54,14 @@ class SubmissionPlayer(Player):
                         distance[bfs[-1]] = distance[top]+1
                         vis.add(bfs[-1])
 
-                        max_dist = max(max_dist, (distance[bfs[-1]], (bfs[-1])))
-        logging.debug(f"Chose move: {max_dist[1]}")
-        return max_dist[1]
+                        if distance[bfs[-1]] in distance_points:
+                            distance_points[distance[bfs[-1]]].append(bfs[-1])
+                        else:
+                            distance_points[distance[bfs[-1]]]= [bfs[-1]]
+
+                        max_dist = max(max_dist, distance[bfs[-1]])
+
+        # if (len(distance_points) == 1):
+        return random.choice(distance_points[max_dist])
+        # else:
+        #     return random.choice(distance_points[max_dist]+distance_points[max_dist-1])

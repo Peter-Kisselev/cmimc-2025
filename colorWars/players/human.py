@@ -13,7 +13,7 @@ class HumanPlayer(Player):
         self.player_index = player_index
         self.grid_size = grid_size
         self.num_players = num_players
-        self.size = 640 // grid_size  # Screen size//Grid size
+        self.size = 1024 // grid_size  # Screen size//Grid size
         self.screen = pygame.display.set_mode((grid_size * self.size, grid_size * self.size))
 
     def play(self, board: List[List[int]], history: List[List[Tuple[int, int]]]) -> Tuple[int, int]:
