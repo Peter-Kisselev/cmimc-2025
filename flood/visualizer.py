@@ -92,7 +92,7 @@ class FloodVisualizer:
                 elif event.type == pygame.KEYDOWN:
                     key = event.key
                     if key == pygame.K_UP:
-                        if SIM_RATE < 30:
+                        if SIM_RATE < 60:
                             SIM_RATE *= 2
                     elif key == pygame.K_DOWN:
                         if SIM_RATE > 0.2:

@@ -261,3 +261,14 @@ class customBot2(Bot):
         # Increment turn counter
         self.TURN += 1
         return (movex, movey, m)
+
+# if 600 <= bH <= 700:
+#     self.cPrint(f"Index: {self.index}")
+#     self.cPrint(f"Rel pos: {rPos}")
+#     self.cPrint(f"Hpos: {msg}")
+#     self.cPrint(f"Position: {self.pos}")
+#     self.cPrint(f"Best pos: {self.bestPos[0]}")
+#     self.cPrint(f"Combined position: {newP}")
+#     self.cPrint(f"New val: {bH}")
+#     self.cPrint(f"Old val: {self.bestPos[1]}")
+#     self.cPrint()

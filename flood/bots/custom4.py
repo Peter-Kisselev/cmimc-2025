@@ -1,14 +1,14 @@
-from typing import List, Tuple
 from bots.bot import Bot
+from typing import List, Tuple
 import random
 import numpy as np
+import math
 
-view_radius = 8
+# Simple bot that walks towards peaks, doesn't communicate other than saying its id
+class customBot4(Bot):
+    DEBUG = True
 
-class SubmissionBot(Bot):
-    DEBUG = False
-
-    ### PASTE BELOW THIS LINE TO AVOID DEBUG ERRORS ###
+    ### COPY BELOW THIS LINE TO AVOID DEBUG ERRORS ###
 
     # Constants
     VIEW = 8
