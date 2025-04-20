@@ -18,11 +18,12 @@ class customBot4(Bot):
     UNSEEN = 1 if DEBUG else -10000
 
     # Parameters (tweak by hand) but constant at runtime
-    EXPLORE = 300
-    ESCAPE_MAX = 30
+    GRAD_SMOOTH = 2
+    EXPLORE = 370
+    ESCAPE_MAX = 32
     HIST_LEN = 3
     MIN_GRAD = 0.5
-    MOMENTUM_MAX = 2
+    MOMENTUM_MAX = 3
 
     def rTF(self) -> bool:
         return random.choice([True, False])
@@ -75,7 +76,7 @@ class customBot4(Bot):
 
         # pick one direction based on index
         moves = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]]
-        self.movey, self.movex = moves[index % 8]
+        self.dy, self.dx = moves[index % 8]
 
     # wraparound
     def getTruePos(self, pos) -> np.ndarray[int, int]:
@@ -180,7 +181,7 @@ class customBot4(Bot):
 
     # Update known values with new things and update best position
     def updateCache(self, heights):
-        for val in self.slidingWindow(self.pos, self.movex, self.movey):
+        for val in self.slidingWindow(self.pos, self.dx, self.dy):
             cache_pos = val[:2]
             local_y = val[2]
             local_x = val[3]
@@ -192,38 +193,66 @@ class customBot4(Bot):
             if h > self.bestPos[1]:
                 self.bestPos = [curPos.copy(), h]
 
+    # SLOW FIRST UPDATE of caching
+    def updateCacheSLOW(self, heights):
+        for i in range(len(heights)):
+            for j in range(len(heights[0])):
+                # curPos = self.getTruePos([i - self.VIEW + self.pos[0], j - self.VIEW + self.pos[1]])
+                curPos = self.getTruePos(np.add(self.pos-self.VIEW,[i,j]))
+                h = heights[i][j]
+                self.cache[curPos[0]][curPos[1]] = h
+                if h > self.bestPos[1]:
+                    self.bestPos = [curPos.copy(), h]
+
     # Compute gradient based on 3x3 grid centered on current position (for continuous section)
     def contGrad(self, heights):
         center = len(heights) // 2
-        gx = (heights[center, center + 1] - heights[center, center - 1]) * 0.5
-        gy = (heights[center + 1, center] - heights[center - 1, center]) * 0.5
-        return np.array([gy, gx])
+        gxTot = 0
+        gyTot = 0
+        for i in range(self.GRAD_SMOOTH):
+            gxTot += (heights[center, center + i] - heights[center, center - i]) / 2
+            gyTot += (heights[center + i, center] - heights[center - i, center]) / 2
+        return np.array([gyTot/self.GRAD_SMOOTH, gxTot/self.GRAD_SMOOTH])
+
+    # Detect moving into water and turn (pos is assumed to be after dy and dx appied)
+    def avoidWater(self, pos):
+        level = self.TURN + 1
+        return self.cache[pos[0]][pos[1]] <= level
 
     # perform a step
     def step(self, height: np.ndarray, neighbors: List[Tuple[int, int, int]]) -> Tuple[int, int, int]:
         height = height.transpose()
         sign = lambda x: -1 if x < 0 else (0 if x == 0 else 1)
 
-        self.updateCache(height)
+        if self.TURN <= 4:
+            self.updateCacheSLOW(height)
+        else:
+            self.updateCache(height)
+
         self.readNbrs(neighbors)
 
         if self.TURN > self.EXPLORE:
-            if self.bestPos[1] > self.cache[self.pos[0]][self.pos[1]]:
-                dy, dx = self.torusRelPos(self.pos, self.bestPos[0])
+            if self.momentum == 0:
+                if self.bestPos[1] > self.cache[self.pos[0]][self.pos[1]]:
+                    dely, delx = self.torusRelPos(self.pos, self.bestPos[0])
 
-                movex = sign(dx)
-                movey = sign(dy)
-            elif self.bestPos[1] == self.cache[self.pos[0]][self.pos[1]]:
-                grad = self.contGrad(height)
-                if sum(grad**2) > self.MIN_GRAD*0.5:
-                    movey = sign(grad[0])
-                    movex = sign(grad[1])
+                    dx = sign(delx)
+                    dy = sign(dely)
+                elif self.bestPos[1] == self.cache[self.pos[0]][self.pos[1]]:
+                    grad = self.contGrad(height)
+                    if sum(grad**2) > 2*self.MIN_GRAD:
+                        dy = sign(grad[0])
+                        dx = sign(grad[1])
+                    else:
+                        dx = 0
+                        dy = 0
                 else:
-                    movex = 0
-                    movey = 0
+                    dx = self.dx
+                    dy = self.dy
             else:
-                movex = self.movex
-                movey = self.movey
+                dx = self.dx
+                dy = self.dy
+                self.momentum += -1
         else:
             if self.momentum == 0:
                 self.posHist.append(self.pos.copy())
@@ -232,28 +261,43 @@ class customBot4(Bot):
 
                 grad = self.contGrad(height)
                 if (sum(grad**2) > self.MIN_GRAD) and (any(self.pos[i] != self.posHist[0][i] for i in range(len(self.pos)))):
-                    movey = sign(round(grad[0]))
-                    movex = sign(round(grad[1]))
+                    dy = sign(round(grad[0]))
+                    dx = sign(round(grad[1]))
                     self.momentum = self.MOMENTUM_MAX
                 else:
                     self.momentum = self.ESCAPE_MAX
-                    movey = -sign(grad[0])
-                    movex = -sign(grad[1])
+                    dy = -sign(grad[0])
+                    dx = -sign(grad[1])
             else:
-                movex = self.movex
-                movey = self.movey
+                dx = self.dx
+                dy = self.dy
                 self.momentum += -1
 
-        self.pos[1] += movex
-        self.pos[0] += movey
-        self.movex = movex
-        self.movey = movey
+        self.pos[1] += dx
+        self.pos[0] += dy
+        self.dx = dx
+        self.dy = dy
 
         self.pos = self.getTruePos(self.pos)
+
+        # if self.index == 10:
+        #     self.saveCache(self.cache)
+        #     print(self.cache[tuple(self.pos)])
+
+        # If moving into water, simply turn around
+        if self.avoidWater(self.pos):
+            dx = -dx
+            dy = -dy
+            self.dx = dx
+            self.dy = dy
+            self.momentum = 20 if self.TURN <= self.EXPLORE else 3
+            self.pos[1] += 2*dx
+            self.pos[0] += 2*dy
+            self.pos = self.getTruePos(self.pos)
 
         relPos = [self.torusRelPos(self.pos, self.bestPos[0]), self.bestPos[1]]
         m = self.packMsg(relPos)
 
         # Increment turn counter
         self.TURN += 1
-        return (movex, movey, m)
+        return (dx, dy, m)
