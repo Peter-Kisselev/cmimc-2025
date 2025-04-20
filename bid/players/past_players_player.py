@@ -15,11 +15,19 @@ class PastPlayer(Player):
         self.remaining_auctions = set(range(1,11))|set(range(-5,0))
         self.scores = [0]*4
 
-        self.BAD_GREEDY_OTO = mapping = {-5:10, -4:8, -3:6, -2:4, -1: 2, 1:1, 2:3, 3:5, 4:7, 5:9, 6:11, 7:12, 8:13, 9:14, 10:15}
         middle = [-5, -4, 4, 5, 6, 3, 7]
         cards = [15, 14, 13, 12, 11, 10, 9]
         random.shuffle(cards)
         self.MIDDLE_PLAYER_OTO = {middle[i]:cards[i] for i in range(7)}
+
+        top_cards = [12,13,14,15]
+        middle_cards = [10,11]
+
+        random.shuffle(top_cards)
+        random.shuffle(middle_cards)
+
+        self.BAD_GREEDY_OTO = {-5:9, -4:7, -3:5, -2:4, -1: 2, 1:1, 2:3, 3:6, 4:8, 5:middle_cards[0], 6:middle_cards[1], 7:top_cards[0], 8:top_cards[1], 9:top_cards[2], 10:top_cards[3]}
+
 
     def play(self, score_card: int, player_history: List[List[int]]) -> int:
         self.update_vars(player_history)

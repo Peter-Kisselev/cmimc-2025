@@ -14,9 +14,6 @@ logging.basicConfig(
 class SubmissionPlayer(Player):
     def __init__(self, player_index: int):
         self.player_index = player_index
-        self.MIN_VALUE_PER_BID = 2/3
-        self.MIN_SAFETY_PER_BID = 1/3
-
         self.INF = int(1e9)
         self.my_cards = set(range(1, 16))
         self.opponent_cards = [set(range(1, 16)) for i in range(4)]
@@ -24,65 +21,27 @@ class SubmissionPlayer(Player):
         self.remaining_auctions = set(range(1,11))|set(range(-5,0))
         self.scores = [0]*4
 
-        self.BAD_GREEDY_OTO = mapping = {-5:10, -4:8, -3:6, -2:4, -1: 2, 1:1, 2:3, 3:5, 4:7, 5:9, 6:11, 7:12, 8:13, 9:14, 10:15}
-        middle = [-5, -4, 4, 5, 6, 3, 7]
-        cards = [15, 14, 13, 12, 11, 10, 9]
-        random.shuffle(cards)
-        self.MIDDLE_PLAYER_OTO = {middle[i]:cards[i] for i in range(7)}
+        top_cards = [12,13,14,15]
+        middle_cards = [10,11]
 
+        random.shuffle(top_cards)
+        random.shuffle(middle_cards)
+
+        self.oto = {-5:9, -4:7, -3:5, -2:4, -1: 2, 1:1, 2:3, 3:6, 4:8, 5:middle_cards[0], 6:middle_cards[1], 7:top_cards[0], 8:top_cards[1], 9:top_cards[2], 10:top_cards[3]}
     def play(self, score_card: int, player_history: List[List[int]]) -> int:
         self.update_vars(player_history)
-        # BEGIN
-
-        # if len(self.my_cards) > 3:
-        #     new_list = list(self.remaining_auctions)
-        #     new_list.remove(score_card)
-        #     player_cards_remaining = [list({*range(1,16)}-set(player_history[i])) for i in range(4)]
-        #     score, ret = self.terminal_tree([score_card]+new_list, 0, player_cards_remaining, True)
-        # else:
-        possible_bids = [self.BAD_GREEDY_OTO[score_card]]
-        if (score_card in self.MIDDLE_PLAYER_OTO):
-            possible_bids.append(self.MIDDLE_PLAYER_OTO[score_card])
-
-        if score_card > 0:
-            needed_to_win = max(possible_bids)+1
-            if (possible_bids.count(max(possible_bids)) == 2):
-                needed_to_win-=2
-            used_card = -1
-            for card in sorted(list(self.my_cards)):
-                if (card >= needed_to_win):
-                    used_card = card
-                    break
-
-            if used_card == -1:
-                ret = min(list(self.my_cards))
-            else:
-                if score_card/used_card >= self.MIN_VALUE_PER_BID:
-                    ret = used_card
-                else:
-                    ret = min(list(self.my_cards))
+        # print(self.scores)
+        # CODE BEGINS
+        if (len(self.remaining_auctions) > 3):
+            ret = self.oto[score_card]
         else:
-            needed_to_save = min(possible_bids)+1
-            if (possible_bids.count(min(possible_bids)) == 2):
-                ret = min(list(self.my_cards))
-            else:
-                used_card = -1
-                for card in sorted(list(self.my_cards)):
-                    if card >= needed_to_save:
-                        used_card = card
-                        break
+            new_list = list(self.remaining_auctions)[:]
+            new_list.remove(score_card)
+            player_cards_remaining = [list({*range(1,16)}-set(player_history[i])) for i in range(4)]
+            score, ret = self.terminal_tree([score_card]+new_list, 0, player_cards_remaining, True)
 
-                if used_card == -1:
-                    ret = min(list(self.my_cards))
-                else:
-                    if -1*score_card/used_card >= self.MIN_SAFETY_PER_BID:
-                        ret = used_card
-                    else:
-                        ret = min(list(self.my_cards))
-
-        # END
+        # CODE ENDS
         self.previous_auctions.append(score_card)
-        self.my_cards.remove(ret)
         return ret
 
     def update_vars(self, player_history):
@@ -105,6 +64,7 @@ class SubmissionPlayer(Player):
             for i in range(4):
                 if player_history[i][-1] == winning_bid:
                     self.scores[i]+=self.previous_auctions[-1]
+
 
     def terminal_tree(self, rem_aucs:List[int], curr_score:int, remaining_player_cards: List[List[int]], is_first:bool) -> (int, int):
         score_distribution = {}

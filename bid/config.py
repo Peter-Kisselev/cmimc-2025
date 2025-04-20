@@ -10,7 +10,7 @@ from players.terrible_player import TerriblePlayer
 from players.testing_strategies import TestPlayer
 
 # List of players in the game, of form (player_name, player_class)
-player_classes = [("TTS #1", TerminalTreeSearch), ("Past Player #1", PastPlayer), ("Test Player #1", TestPlayer), ("Terrible Player #1", TerriblePlayer)]
+player_classes = [("TTS #1", TerminalTreeSearch), ("Past Player #1", PastPlayer), ("Test Player #1", TestPlayer), ("TTS Player #2", TerminalTreeSearch)]
 
 # Number of games to run
-num_games = int(100)
+num_games = int(10)
