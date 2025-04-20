@@ -2,6 +2,7 @@ from typing import List, Tuple, Type
 from bots.bot import Bot
 from scipy.interpolate import RegularGridInterpolator
 import numpy as np
+import time
 
 class FloodResult:
     def __init__(self, num_alive: int, difficulty: int, seed: int):
@@ -9,10 +10,11 @@ class FloodResult:
         self.difficulty = difficulty
         self.seed = seed
 
-    def print_result(self) -> None:
+    def print_result(self, sT) -> None:
         difficulty_strings = ["Easy", "Medium", "Hard"]
         difficulty_string = difficulty_strings[self.difficulty]
         print(f"Number of Bots Alive on Difficulty {difficulty_string}, Seed {self.seed}: {self.num_alive}")
+        print(f"Runtime: {(time.time()-sT):.3f}s")
 
 class FloodSimulator:
     @staticmethod

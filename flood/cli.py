@@ -2,6 +2,7 @@ import click
 import config
 from engine import FloodEngine, FloodSimulator
 from visualizer import FloodVisualizer
+import time; sT = time.time()
 
 @click.group()
 def cli():
@@ -15,7 +16,7 @@ def run():
         config.difficulty,
         config.seed
     )
-    result.print_result()
+    result.print_result(sT)
 
 @cli.command()
 def visualize():

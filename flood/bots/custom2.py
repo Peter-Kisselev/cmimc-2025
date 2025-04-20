@@ -1,15 +1,14 @@
-from typing import List, Tuple
 from bots.bot import Bot
+from typing import List, Tuple
 import random
 import numpy as np
+import math
 
-view_radius = 8
-
-class SubmissionBot(Bot):
+# Simple bot that walks towards peaks, doesn't communicate other than saying its id
+class customBot2(Bot):
     DEBUG = False
 
-    ### PASTE BELOW THIS LINE TO AVOID DEBUG ERRORS ###
-
+    ### COPY BELOW THIS LINE TO AVOID DEBUG ERRORS ###
     VIEW = 8
     GRID_SIZE = 512
     DEBUG_INDEX = 5
@@ -19,11 +18,11 @@ class SubmissionBot(Bot):
     EXPLORE = 300
     ESCAPE_MAX = 30
 
-    HIST_LEN = 2
+    HIST_LEN = 3
 
     MIN_GRAD = 0.5
 
-    MOMENTUM_MAX = 4
+    MOMENTUM_MAX = 2
 
     def rTF(self) -> bool:
         return random.choice([True, False])
@@ -204,6 +203,7 @@ class SubmissionBot(Bot):
                 if len(self.posHist) > self.HIST_LEN:
                     self.posHist.pop(0)
                 self.cPrint(self.posHist)
+                self.cPrint(self.pos)
 
                 grad = self.contGrad(height)
                 if (sum(grad**2) > self.MIN_GRAD) and (any(self.pos[i] != self.posHist[0][i] for i in range(len(self.pos)))):
