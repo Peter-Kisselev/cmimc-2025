@@ -1,17 +1,8 @@
 from typing import List, Tuple
 from players.player import Player
 import random
-import json
-import logging
 
-logging.basicConfig(
-    filename='debug.log',
-    level=logging.DEBUG,
-    format='%(asctime)s %(levelname)s: %(message)s'
-)
-
-# Don't change the name of this class when you submit!
-class SubmissionPlayer(Player):
+class AntiClumpingPlayer(Player):
     def __init__(self, player_index: int, grid_size: int, num_players: int):
         self.player_index = player_index
         self.grid_size = grid_size
@@ -54,5 +45,5 @@ class SubmissionPlayer(Player):
                         vis.add(bfs[-1])
 
                         max_dist = max(max_dist, (distance[bfs[-1]], (bfs[-1])))
-        logging.debug(f"Chose move: {max_dist[1]}")
+
         return max_dist[1]
