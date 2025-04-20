@@ -1,17 +1,8 @@
 from players.player import Player
 from typing import List
 import random
-import json
-import logging
 
-logging.basicConfig(
-    filename='debug.log',
-    level=logging.DEBUG,
-    format='%(asctime)s %(levelname)s: %(message)s'
-)
-
-# Don't change the name of this class when you submit!
-class SubmissionPlayer(Player):
+class PastPlayer(Player):
     def __init__(self, player_index: int):
         self.player_index = player_index
         self.MIN_VALUE_PER_BID = 2/3

@@ -68,8 +68,10 @@ class TerminalTreeSearch(Player):
                         for p4 in remaining_player_cards[3]:
                             moves = [p1,p2,p3,p4]
                             new_score = curr_score
-                            if (max(moves) == moves[self.player_index] and moves.count(max(moves)) == 1):
-                                new_score+=card
+                            for mv in sorted(moves, reverse=True):
+                                if (moves.count(mv) == 1 and moves[self.player_index] == mv):
+                                    new_score+=card
+                                    break
                             new_player_cards = [[mv for mv in remaining_player_cards[p] if mv != moves[p]] for p in range(4)]
                             ret, mv = self.terminal_tree(rem_aucs[:idx] + rem_aucs[idx + 1:], new_score, new_player_cards, False)
                             if moves[self.player_index] in score_distribution:
