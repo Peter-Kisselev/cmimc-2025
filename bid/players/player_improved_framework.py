@@ -5,6 +5,7 @@ import random
 class BasePlayer(Player):
     def __init__(self, player_index: int):
         self.player_index = player_index
+        self.INF = int(1e9)
         self.my_cards = set(range(1, 16))
         self.opponent_cards = [set(range(1, 16)) for i in range(4)]
         self.previous_auctions = []

@@ -13,7 +13,8 @@ class HumanInputPlayer(Player):
     def play(self, score_card: int, player_history: List[List[int]]) -> int:
         self.update_vars(player_history)
         # CODE BEGINS
-        print(" ".join(str(player_history[i][-1]) for i in range(4)))
+        if (player_history[0]):
+            print(" ".join(str(player_history[i][-1]) for i in range(4)))
         print(f"score_card: {score_card}")
         print("----")
         print("\n".join(map(str, self.opponent_cards)))

@@ -2,31 +2,31 @@ from players.player import Player
 from typing import List
 import random
 
-class RandomPlayer(Player):
+class TerriblePlayer(Player):
     def __init__(self, player_index: int):
         self.player_index = player_index
+        self.INF = int(1e9)
         self.my_cards = set(range(1, 16))
         self.opponent_cards = [set(range(1, 16)) for i in range(4)]
         self.previous_auctions = []
         self.remaining_auctions = set(range(1,11))|set(range(-5,0))
         self.scores = [0]*4
-        # print(f"Random ID: {player_index}")
 
     def play(self, score_card: int, player_history: List[List[int]]) -> int:
         self.update_vars(player_history)
         # BEGIN
 
-        ret = random.choice(list(self.my_cards))
-        # if player_history[0]:
-        #     print(" ".join(str(player_history[i][-1]) for i in range(4)))
-        # print("----")
-        # print(f"score_card: {score_card}")
-        # print("\n".join(map(str, self.opponent_cards)))
+        all_cards = [*self.opponent_cards[0], *self.opponent_cards[1], *self.opponent_cards[2], *self.opponent_cards[3]]
+        mn = (5, -1)
+        for i in self.my_cards:
+            mn = min(mn, (all_cards.count(i), i))
 
+        ret = mn[1]
         # END
         self.previous_auctions.append(score_card)
         self.my_cards.remove(ret)
         return ret
+
     def update_vars(self, player_history):
         if not player_history[0]: return
         bids = [0]*16

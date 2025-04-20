@@ -65,7 +65,7 @@ class BidEngine:
                 winner_index = bids.index(unique_bids[0])
 
             scores[players[winner_index][0]] += score_card
-            print(f"Current Scores: {scores}")
+            # print(f"Current Scores: {scores}")
         return scores
 
     @staticmethod

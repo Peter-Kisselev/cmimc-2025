@@ -26,10 +26,6 @@ class AdaptivePlayer(Player):
         self.my_cards.remove(ret)
         return ret
 
-    def choose_card(self) -> int:
-        all_cards = sorted([*self.opponent_cards[0], *self.opponent_cards[1], *self.opponent_cards[2], *self.opponent_cards[3]])
-
-
     def update_vars(self, player_history):
         if not player_history[0]: return
         bids = [0]*16

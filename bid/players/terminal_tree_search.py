@@ -10,23 +10,20 @@ class TerminalTreeSearch(Player):
         self.previous_auctions = []
         self.remaining_auctions = set(range(1,11))|set(range(-5,0))
         self.scores = [0]*4
-        middle = [-5, -4, 4, 5, 6, 3, 7]
-        cards = [15, 14, 13, 12, 11, 10, 9]
-        for card in cards:
-            self.my_cards.remove(card)
-        random.shuffle(cards)
-        self.oto = {middle[i]:cards[i] for i in range(7)}
+
+        top_cards = [12,13,14,15]
+        middle_cards = [10,11]
+
+        random.shuffle(top_cards)
+        random.shuffle(middle_cards)
+
+        self.oto = {-5:9, -4:7, -3:5, -2:4, -1: 2, 1:1, 2:3, 3:6, 4:8, 5:middle_cards[0], 6:middle_cards[1], 7:top_cards[0], 8:top_cards[1], 9:top_cards[2], 10:top_cards[3]}
     def play(self, score_card: int, player_history: List[List[int]]) -> int:
         self.update_vars(player_history)
         # print(self.scores)
         # CODE BEGINS
         if (len(self.remaining_auctions) > 3):
-            ret = None # This is the choice
-            if (score_card in self.oto):
-                ret = self.oto[score_card]
-            else:
-                ret = random.choice(list(self.my_cards))
-                self.my_cards.remove(ret)
+            ret = self.oto[score_card]
         else:
             new_list = list(self.remaining_auctions)[:]
             new_list.remove(score_card)
