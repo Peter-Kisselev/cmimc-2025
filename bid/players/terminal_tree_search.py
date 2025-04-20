@@ -22,13 +22,13 @@ class TerminalTreeSearch(Player):
         self.update_vars(player_history)
         # print(self.scores)
         # CODE BEGINS
-        if (len(self.remaining_auctions) > 3):
-            ret = self.oto[score_card]
-        else:
-            new_list = list(self.remaining_auctions)[:]
-            new_list.remove(score_card)
-            player_cards_remaining = [list({*range(1,16)}-set(player_history[i])) for i in range(4)]
-            score, ret = self.terminal_tree([score_card]+new_list, 0, player_cards_remaining, True)
+        # if (len(self.remaining_auctions) > 3):
+        ret = self.oto[score_card]
+        # else:
+        #     new_list = list(self.remaining_auctions)[:]
+        #     new_list.remove(score_card)
+        #     player_cards_remaining = [list({*range(1,16)}-set(player_history[i])) for i in range(4)]
+        #     score, ret = self.terminal_tree([score_card]+new_list, 0, player_cards_remaining, True)
 
         # CODE ENDS
         self.previous_auctions.append(score_card)

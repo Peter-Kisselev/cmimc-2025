@@ -4,6 +4,7 @@ from players.player import Player
 from collections import defaultdict
 import random
 
+
 class BidResult:
     def __init__(self, scores: Dict[str, float]):
         self.scores = scores
@@ -13,18 +14,19 @@ class BidResult:
         header_score = "Average Score"
         player_col_width = max(len(header_player), max(len(player) for player in self.scores.keys()))
         score_col_width = max(len(header_score), max(len(str(score)) for score in self.scores.values()))
-        
+
         border = f"+{'-' * (player_col_width + 2)}+{'-' * (score_col_width + 2)}+"
         header = f"| {header_player.ljust(player_col_width)} | {header_score.rjust(score_col_width)} |"
-        
+
         print(border)
         print(header)
         print(border)
-        
+
         for player, score in sorted(self.scores.items(), key=lambda x: x[1], reverse=True):
             print(f"| {player.ljust(player_col_width)} | {str(score).rjust(score_col_width)} |")
-        
+
         print(border)
+
 
 class BidEngine:
     @staticmethod
@@ -69,20 +71,30 @@ class BidEngine:
         return scores
 
     @staticmethod
-    def grade(player_classes: List[Tuple[str, Type[Player]]], num_games: int = 100) -> BidResult:
+    def grade(player_classes: List[Tuple[str, Type[Player]]], num_games: int = 100, training_weights = []) -> BidResult:
         scores = {player_name: 0 for player_name, player_class in player_classes}
 
         # Simulate games
         net_time = 0
         for _ in range(num_games):
             start_time = time.time()
-            players = [(player_name, player_class(player_index=i)) for i, (player_name, player_class) in enumerate(player_classes)] # Initialize with player index
+            players = [(player_name, player_class(player_index=i)) for i, (player_name, player_class) in
+                       enumerate(player_classes) if 'Train' not in player_name]  # Initialize with player index
+            train_index = -1
+            plyer = None
+            for i,p in enumerate(player_classes):
+                if 'Train' in p[0]:
+                    train_index=i
+                    plyer = p
+                    break
+
+            players.insert(train_index, (plyer[0], plyer[1](player_index=train_index, weights=training_weights)))
             game_scores = BidEngine.run_game(players)
             max_winning = -int(1e9)
             for player_name, game_score in game_scores.items():
                 scores[player_name] += game_score
-            net_time += time.time()-start_time
+            net_time += time.time() - start_time
 
         scores = {player_name: score / num_games for player_name, score in scores.items()}
-        print(f"Average Game Time: {net_time/num_games}s")
+        print(f"Average Game Time: {net_time / num_games}s")
         return BidResult(scores)
