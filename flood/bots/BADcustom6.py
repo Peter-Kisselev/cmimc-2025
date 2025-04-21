@@ -1,14 +1,14 @@
-from typing import List, Tuple
 from bots.bot import Bot
+from typing import List, Tuple
 import random
 import numpy as np
+import math
 
-view_radius = 8
+# Simple bot that walks towards peaks, doesn't communicate other than saying its id
+class customBot6_2(Bot):
+    DEBUG = True
 
-class SubmissionBot(Bot):
-    DEBUG = False
-
-    ### PASTE BELOW THIS LINE TO AVOID DEBUG ERRORS ###
+    ### COPY BELOW THIS LINE TO AVOID DEBUG ERRORS ###
 
     # Constants
     VIEW = 8
@@ -19,11 +19,14 @@ class SubmissionBot(Bot):
 
     # Parameters (tweak by hand) but constant at runtime
     GRAD_SMOOTH = 2
-    EXPLORE = 300
+    EXPLORE = 350
     ESCAPE_MAX = 20
     HIST_LEN = 3
     MIN_GRAD = 500
     MOMENTUM_MAX = 3
+
+    MOVEDICT = {(1, 1):0,(1, -1):1,(-1, -1):2,(-1, 1):3}
+    MOVELIST = [(1, 1),(1, -1),(-1, -1),(-1, 1)]
 
     def rTF(self) -> bool:
         return random.choice([True, False])
@@ -102,11 +105,12 @@ class SubmissionBot(Bot):
         elif self.id % 4 == 1:
             self.mainDir = (1, -1)
         elif self.id % 4 == 2:
-            self.mainDir = (1, 1)
-            # self.mainDir = (-1, 1)
+            self.mainDir = (-1, 1)
         else:
-            self.mainDir = (1, -1)
-            # self.mainDir = (-1, -1)
+            self.mainDir = (-1, -1)
+
+        self.bounceCount = 1
+        self.bounceMax = 17
 
     # wraparound
     def getTruePos(self, pos) -> np.ndarray[int, int]:
@@ -126,11 +130,15 @@ class SubmissionBot(Bot):
         return val
 
     # Pack binary message
-    def packMsg(self, bestPos) -> int:
+    def packMsg(self, bestPos, mainDir) -> int:
+        mvId = self.MOVEDICT[mainDir]
+
         # widths: 10 bits signed a, 10 bits signed b, 10 bits unsigned c
         wa = 10
         wb = 10
         wc = 10
+        wd = 2
+
         a = bestPos[0][0]
         b = bestPos[0][1]
         c = int(bestPos[1])  # ensure integer (lose only tiny amount of precision)
@@ -138,8 +146,10 @@ class SubmissionBot(Bot):
         a_raw = a & ((1 << wa) - 1)
         b_raw = b & ((1 << wb) - 1)
         c_raw = c & ((1 << wc) - 1)
+        d_raw = mvId & ((1 << wd) - 1)
 
-        payload = (a_raw << (wb + wc)) | (b_raw << wc) | c_raw
+        # payload = (a_raw << (wb + wc)) | (b_raw << wc) | c_raw
+        payload = (d_raw << (wa + wb + wc)) | (a_raw << (wb + wc)) | (b_raw << wc) | c_raw
         return payload
 
     # Unpack binary message
@@ -147,17 +157,34 @@ class SubmissionBot(Bot):
         wa = 10
         wb = 10
         wc = 10
-        offSet = 32-wa-wb-wc
+        wd = 2
+
+        # offSet = 32-wa-wb-wc
         bits = bin(msg)[2:].zfill(32)
 
-        a_str = bits[offSet:offSet+wa]
-        b_str = bits[offSet+wa:offSet+wa+wb]
-        c_str = bits[offSet+wa+wb:]
+        off_d = 0
+        off_a = off_d + wd
+        off_b = off_a + wa
+        off_c = off_b + wb
+
+        # a_str = bits[offSet:offSet+wa]
+        # b_str = bits[offSet+wa:offSet+wa+wb]
+        # c_str = bits[offSet+wa+wb:]
+
+        d_str = bits[off_d:off_a]
+        a_str = bits[off_a:off_b]
+        b_str = bits[off_b:off_c]
+        c_str = bits[off_c:]
+
+        # a = self.decodeSigned(a_str)
+        # b = self.decodeSigned(b_str)
+        # c = int(c_str, 2)
 
         a = self.decodeSigned(a_str)
         b = self.decodeSigned(b_str)
         c = int(c_str, 2)
-        return [a, b, c]
+        d = int(d_str, 2)
+        return [a, b, c, d]
 
     # Use neighbor info
     def readNbrs(self, nbrs):
@@ -165,6 +192,22 @@ class SubmissionBot(Bot):
             rPos = [nbr[1], nbr[0]]
             if sum(rPos) == 0: continue #check if self
             msg = self.unpackMsg(nbr[2])
+            dirId = msg.pop(3)
+
+            if self.id % 2 == 0:
+                if self.bounceCount % self.bounceMax == 0:
+                    if self.rTF():
+                        newDir = self.MOVELIST[(dirId+1)%4]
+                        if any([-1*newDir[i] != self.mainDir[i] for i in range(len(self.mainDir))]):
+                            self.mainDir = newDir
+                    else:
+                        newDir = self.MOVELIST[(dirId-1)%4]
+                        if any([-1*newDir[i] != self.mainDir[i] for i in range(len(self.mainDir))]):
+                            self.mainDir = newDir
+
+                if self.bounceCount == self.bounceMax:
+                    self.bounceCount = 1
+
             bH = msg.pop(2)
             bP = np.add(np.add(self.pos, rPos), msg)
             newP = self.getTruePos(bP)
@@ -253,7 +296,7 @@ class SubmissionBot(Bot):
     # Detect moving into water and turn (pos is assumed to be after dy and dx appied)
     def avoidWater(self, pos):
         safe = []
-        buffer = 30
+        buffer = 50
         level = self.TURN + 1 + buffer
         for dy, dx in self.directions:
         # for dx, dy in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
@@ -392,8 +435,12 @@ class SubmissionBot(Bot):
         self.pos = self.getTruePos(self.pos)
 
         relPos = [self.torusRelPos(self.pos, self.bestPos[0]), self.bestPos[1]]
-        m = self.packMsg(relPos)
+        m = self.packMsg(relPos, self.mainDir)
 
         # Increment turn counter
         self.TURN += 1
+
+        if self.bounceCount < self.bounceMax:
+            self.bounceCount += 1
+
         return (dx, dy, m)

@@ -7,6 +7,7 @@ from config import format_message
 class FloodVisualizer:
     # Resolution of pygame window, can reduce for performance
     RES = 1024
+    # RES = 1536
     USEGRAYSCALE = False  # Set true to improve performance
     
     def __init__(self, simulator):

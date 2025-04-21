@@ -19,7 +19,7 @@ class customBot6(Bot):
 
     # Parameters (tweak by hand) but constant at runtime
     GRAD_SMOOTH = 2
-    EXPLORE = 350
+    EXPLORE = 300
     ESCAPE_MAX = 20
     HIST_LEN = 3
     MIN_GRAD = 500
@@ -73,21 +73,40 @@ class customBot6(Bot):
         self.ESCAPE = 0
         self.posHist = [[0,0],[0,0]]
         self.momentum = 0
-        self.sideChance = 10
+        self.sideChance = 4
 
         # pick one direction based on index
         moves = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]]
         self.dy, self.dx = moves[index % 8]
 
-        self.directions = [
-            (-1, -1), (-1, 0), (-1, 1),
-            (0, -1),          (0, 1),
-            (1, -1),  (1, 0), (1, 1)
-        ]
+        if self.id % 2 == 0:
+            self.directions = [
+                (1, -1), (-1, 0), (1, 1),
+                (0, -1),          (0, 1),
+                (-1, -1),  (1, 0), (-1, 1)
+            ]
+        else:
+            self.directions = [
+                (-1, -1), (-1, 0), (-1, 1),
+                (0, -1),          (0, 1),
+                (1, -1),  (1, 0), (1, 1)
+            ]
 
         self.noUp = False
 
         self.slideCache = {}
+
+        self.mainDir = 0
+        if self.id % 4 == 0:
+            self.mainDir = (1, 1)
+        elif self.id % 4 == 1:
+            self.mainDir = (1, -1)
+        elif self.id % 4 == 2:
+            self.mainDir = (1, 1)
+            # self.mainDir = (-1, 1)
+        else:
+            self.mainDir = (1, -1)
+            # self.mainDir = (-1, -1)
 
     # wraparound
     def getTruePos(self, pos) -> np.ndarray[int, int]:
@@ -234,7 +253,8 @@ class customBot6(Bot):
     # Detect moving into water and turn (pos is assumed to be after dy and dx appied)
     def avoidWater(self, pos):
         safe = []
-        level = self.TURN + 1
+        buffer = 30
+        level = self.TURN + 1 + buffer
         for dy, dx in self.directions:
         # for dx, dy in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
             newPos = self.getTruePos(np.add(pos,[dy,dx]))
@@ -248,8 +268,13 @@ class customBot6(Bot):
         bestDir = (0, 0)
 
         for dx, dy in self.directions:
-            newPos = np.add(pos, [dy, dx])
             counter = 0
+
+            if self.id % 2 == 0:
+                if (dy, dx) in {(1, -1), (-1, 1)}:
+                    counter += 5
+
+            newPos = np.add(pos, [dy, dx])
 
             for val in self.slidingWindow(newPos, self.dx, self.dy):
                 cache_pos = val[:2]
@@ -276,6 +301,9 @@ class customBot6(Bot):
         if self.bestPos[1] > 700:
             self.sideChance = 30
 
+        dy = 0
+        dx = 0
+
         if self.momentum == 0:
             if self.TURN > self.EXPLORE:
                 if self.bestPos[1] > self.cache[self.pos[0]][self.pos[1]]:
@@ -298,18 +326,30 @@ class customBot6(Bot):
                 if len(self.posHist) > self.HIST_LEN:
                     self.posHist.pop(0)
 
-                grad = self.contGrad(height)
-                if (sum(grad**2) > self.MIN_GRAD) and (any(self.pos[i] != self.posHist[0][i] for i in range(len(self.pos)))):
-                    dy = sign(round(grad[0]))
-                    dx = sign(round(grad[1]))
-                    self.momentum = self.MOMENTUM_MAX
-                else:
-                    dy, dx = self.mostUnchecked(self.pos)
-                    self.momentum = self.ESCAPE_MAX//2
-                    if dy + dx == 0:
-                        dx = 1
-                        dy = (2*int(self.rTF())-1)
-                        self.momentum = self.ESCAPE_MAX//2
+                # grad = self.contGrad(height)
+                # if (sum(grad**2) > self.MIN_GRAD) and (any(self.pos[i] != self.posHist[0][i] for i in range(len(self.pos)))):
+                #     dy = sign(round(grad[0]))
+                #     dx = sign(round(grad[1]))
+                #     self.momentum = self.MOMENTUM_MAX
+                # else:
+                # dy, dx = self.mostUnchecked(self.pos)\
+
+                dy, dx = self.mainDir
+
+                # if self.id % 4 == 0:
+                #     dy, dx = (1, 1)
+                # elif self.id % 4 == 1:
+                #     dy, dx = (1, -1)
+                # elif self.id % 4 == 2:
+                #     dy, dx = (-1, 1)
+                # else:
+                #     dy, dx = (-1, -1)
+
+                self.momentum = self.ESCAPE_MAX//2
+                # if abs(dy) + abs(dx) == 0:
+                #     dx = 1
+                #     dy = (2*int(self.rTF())-1)
+                #     self.momentum = self.ESCAPE_MAX//2
                     # dy = -sign(grad[0])
                     # dx = -sign(grad[1])
 
@@ -329,7 +369,7 @@ class customBot6(Bot):
 
         # If moving into water, simply turn around
         available = self.avoidWater(self.pos)
-        if dy + dx != 0 and not((dy, dx) in available):
+        if abs(dy) + abs(dx) != 0 and not((dy, dx) in available):
             if available:
                 newDir = random.choice(available)
             else:

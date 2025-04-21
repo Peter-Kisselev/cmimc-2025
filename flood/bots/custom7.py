@@ -1,14 +1,14 @@
-from typing import List, Tuple
 from bots.bot import Bot
+from typing import List, Tuple
 import random
 import numpy as np
+import math
 
-view_radius = 8
+# Simple bot that walks towards peaks, doesn't communicate other than saying its id
+class customBot7(Bot):
+    DEBUG = True
 
-class SubmissionBot(Bot):
-    DEBUG = False
-
-    ### PASTE BELOW THIS LINE TO AVOID DEBUG ERRORS ###
+    ### COPY BELOW THIS LINE TO AVOID DEBUG ERRORS ###
 
     # Constants
     VIEW = 8
@@ -19,7 +19,7 @@ class SubmissionBot(Bot):
 
     # Parameters (tweak by hand) but constant at runtime
     GRAD_SMOOTH = 2
-    EXPLORE = 300
+    # EXPLORE = 300
     ESCAPE_MAX = 20
     HIST_LEN = 3
     MIN_GRAD = 500
@@ -73,7 +73,13 @@ class SubmissionBot(Bot):
         self.ESCAPE = 0
         self.posHist = [[0,0],[0,0]]
         self.momentum = 0
-        self.sideChance = 4
+
+        if difficulty == 0:
+            self.sideChance = 4
+        elif difficulty == 1:
+            self.sideChance = 2
+        else:
+            self.sideChance = 4
 
         # pick one direction based on index
         moves = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]]
@@ -97,16 +103,35 @@ class SubmissionBot(Bot):
         self.slideCache = {}
 
         self.mainDir = 0
-        if self.id % 4 == 0:
+        if self.id % 2 == 0:
             self.mainDir = (1, 1)
-        elif self.id % 4 == 1:
+            if difficulty == 1:
+                if self.id % 8 == 0:
+                    self.mainDir = (-1, -1)
+
+        elif self.id % 2 == 1:
             self.mainDir = (1, -1)
-        elif self.id % 4 == 2:
-            self.mainDir = (1, 1)
-            # self.mainDir = (-1, 1)
-        else:
-            self.mainDir = (1, -1)
+            if difficulty == 1:
+                if self.id % 8 == 1:
+                    self.mainDir = (-1, 1)
+            # if difficulty == 0:
+            #     if self.id % 8 <= 4:
+            #         self.mainDir = (1, 1)
+        # elif self.id % 4 == 2:
+        #     self.mainDir = (1, 1)
+        #     # self.mainDir = (-1, 1)
+        # else:
+        #     self.mainDir = (1, -1)
             # self.mainDir = (-1, -1)
+
+        if difficulty == 0:
+            self.EXPLORE = 300
+        elif difficulty == 1:
+            self.EXPLORE = 250
+        elif difficulty == 2:
+            self.EXPLORE = 300
+
+        self.randomCount = 0
 
     # wraparound
     def getTruePos(self, pos) -> np.ndarray[int, int]:
@@ -325,34 +350,9 @@ class SubmissionBot(Bot):
                 self.posHist.append(self.pos.copy())
                 if len(self.posHist) > self.HIST_LEN:
                     self.posHist.pop(0)
-
-                # grad = self.contGrad(height)
-                # if (sum(grad**2) > self.MIN_GRAD) and (any(self.pos[i] != self.posHist[0][i] for i in range(len(self.pos)))):
-                #     dy = sign(round(grad[0]))
-                #     dx = sign(round(grad[1]))
-                #     self.momentum = self.MOMENTUM_MAX
-                # else:
-                # dy, dx = self.mostUnchecked(self.pos)\
-
                 dy, dx = self.mainDir
 
-                # if self.id % 4 == 0:
-                #     dy, dx = (1, 1)
-                # elif self.id % 4 == 1:
-                #     dy, dx = (1, -1)
-                # elif self.id % 4 == 2:
-                #     dy, dx = (-1, 1)
-                # else:
-                #     dy, dx = (-1, -1)
-
                 self.momentum = self.ESCAPE_MAX//2
-                # if abs(dy) + abs(dx) == 0:
-                #     dx = 1
-                #     dy = (2*int(self.rTF())-1)
-                #     self.momentum = self.ESCAPE_MAX//2
-                    # dy = -sign(grad[0])
-                    # dx = -sign(grad[1])
-
         else:
             dx = self.dx
             dy = self.dy
