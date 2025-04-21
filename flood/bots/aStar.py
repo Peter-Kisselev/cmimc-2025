@@ -1,8 +1,9 @@
 from bots.bot import Bot
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 import random
 import numpy as np
-import math
+# import math
+from heapq import heappush, heappop
 
 # Simple bot that walks towards peaks, doesn't communicate other than saying its id
 class customBot5(Bot):
@@ -24,6 +25,8 @@ class customBot5(Bot):
     HIST_LEN = 3
     MIN_GRAD = 500
     MOMENTUM_MAX = 3
+
+    PATH_START = 15
 
     def rTF(self) -> bool:
         return random.choice([True, False])
@@ -73,7 +76,6 @@ class customBot5(Bot):
         self.ESCAPE = 0
         self.posHist = [[0,0],[0,0]]
         self.momentum = 0
-        self.sideChance = 10
 
         # pick one direction based on index
         moves = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]]
@@ -88,6 +90,8 @@ class customBot5(Bot):
         self.noUp = False
 
         self.slideCache = {}
+
+        self.path = []
 
     # wraparound
     def getTruePos(self, pos) -> np.ndarray[int, int]:
@@ -256,6 +260,100 @@ class customBot5(Bot):
                 bestDir = (dy, dx)
         return bestDir
 
+    """Bidirectional A* pathfinding with flood awareness"""
+    def aStar(self, start, target):
+        def heuristic(x1: int, y1: int, x2: int, y2: int) -> int:
+            return abs(x1 - x2) + abs(y1 - y2)
+
+        sx, sy = start
+        tx, ty = target
+        grid_size = self.GRID_SIZE
+        current_flood = self.TURN
+
+        # Forward search (from start)
+        forward_open = []
+        heappush(forward_open, (0, sx, sy, 0))
+        forward_costs = {(sx, sy, 0): 0}
+        forward_path = {}
+
+        # Backward search (from target)
+        backward_open = []
+        heappush(backward_open, (0, tx, ty, 0))
+        backward_costs = {(tx, ty, 0): 0}
+        backward_path = {}
+
+        best_cost = np.inf
+        meeting_point = None
+
+        while forward_open and backward_open:
+            # Expand forward search
+            f_cost, fx, fy, f_steps = heappop(forward_open)
+            if (fx, fy, f_steps) in backward_costs:
+                total_cost = f_cost + backward_costs[(fx, fy, f_steps)]
+                if total_cost < best_cost:
+                    best_cost = total_cost
+                    meeting_point = (fx, fy, f_steps)
+
+            # Expand backward search
+            b_cost, bx, by, b_steps = heappop(backward_open)
+            if (bx, by, b_steps) in forward_costs:
+                total_cost = b_cost + forward_costs[(bx, by, b_steps)]
+                if total_cost < best_cost:
+                    best_cost = total_cost
+                    meeting_point = (bx, by, b_steps)
+
+            # Forward neighbors
+            for dx, dy in self.directions:
+                nfx = (fx + dx) % grid_size
+                nfy = (fy + dy) % grid_size
+
+                n_steps = f_steps + 1
+                if self.cache[nfy, nfx] <= current_flood + n_steps:
+                    continue
+
+                new_cost = forward_costs.get((fx, fy, f_steps), np.inf) + 1
+                if new_cost < forward_costs.get((nfx, nfy, n_steps), np.inf):
+                    forward_costs[(nfx, nfy, n_steps)] = new_cost
+                    priority = new_cost + heuristic(nfx, nfy, tx, ty)
+                    heappush(forward_open, (priority, nfx, nfy, n_steps))
+                    forward_path[(nfx, nfy, n_steps)] = (fx, fy, f_steps, dx, dy)
+            # Backward neighbors
+            for dx, dy in self.directions:
+                nbx = (bx + dx) % grid_size
+                nby = (by + dy) % grid_size
+
+                n_steps = b_steps + 1
+                if self.cache[nby, nbx] <= current_flood + n_steps:
+                    continue
+
+                new_cost = backward_costs.get((bx, by, b_steps), np.inf) + 1
+                if new_cost < backward_costs.get((nbx, nby, n_steps), np.inf):
+                    backward_costs[(nbx, nby, n_steps)] = new_cost
+                    priority = new_cost + heuristic(nbx, nby, sx, sy)
+                    heappush(backward_open, (priority, nbx, nby, n_steps))
+                    backward_path[(nbx, nby, n_steps)] = (bx, by, b_steps, dx, dy)
+
+        # Reconstruct path if found
+        if meeting_point:
+            path = []
+            # Build forward path
+            current = meeting_point
+            while current in forward_path:
+                current = forward_path[current]
+                path.append(current)
+            path.reverse()
+
+            # Build backward path
+            current = meeting_point
+            while current in backward_path:
+                current = backward_path[current]
+                path.append(current)
+
+            # Extract first move
+            if len(path) > 1:
+                return path
+        return None
+
     # perform a step
     def step(self, height: np.ndarray, neighbors: List[Tuple[int, int, int]]) -> Tuple[int, int, int]:
         height = height.transpose()
@@ -267,26 +365,38 @@ class customBot5(Bot):
             self.updateCache(height)
 
         self.readNbrs(neighbors)
-        if self.bestPos[1] > 700:
-            self.sideChance = 30
+
+        dx = 0; dy = 0;
 
         if self.momentum == 0:
             if self.TURN > self.EXPLORE:
-                if self.bestPos[1] > self.cache[self.pos[0]][self.pos[1]]:
-                    dely, delx = self.torusRelPos(self.pos, self.bestPos[0])
-                    dx = sign(delx)
-                    dy = sign(dely)
-                elif self.bestPos[1] == self.cache[self.pos[0]][self.pos[1]]:
-                    grad = self.contGrad(height)
-                    if sum(grad**2) > 2*self.MIN_GRAD:
-                        dy = sign(grad[0])
-                        dx = sign(grad[1])
+                if self.path is not None:
+                    dist = sum(abs(self.pos - self.torusRelPos(self.pos, self.bestPos[0])))
+                    print(dist)
+                    if len(self.path) == 0 and dist <= self.PATH_START:
+                        self.path = self.aStar(self.pos, self.bestPos[0])
+                        print("path")
+                        if self.path is not None:
+                            self.path.pop(0)
+                    elif len(self.path) != 0:
+                        nextPos = self.path.pop(0)
+                        dx, dy = nextPos[3:]
+                if self.path is None or len(self.path) == 0:
+                    if self.bestPos[1] > self.cache[self.pos[0]][self.pos[1]]:
+                        dely, delx = self.torusRelPos(self.pos, self.bestPos[0])
+                        dx = sign(delx)
+                        dy = sign(dely)
+                    elif self.bestPos[1] == self.cache[self.pos[0]][self.pos[1]]:
+                        grad = self.contGrad(height)
+                        if sum(grad**2) > 2*self.MIN_GRAD:
+                            dy = sign(grad[0])
+                            dx = sign(grad[1])
+                        else:
+                            dx = 0
+                            dy = 0
                     else:
-                        dx = 0
-                        dy = 0
-                else:
-                    dx = self.dx
-                    dy = self.dy
+                        dx = self.dx
+                        dy = self.dy
             else:
                 self.posHist.append(self.pos.copy())
                 if len(self.posHist) > self.HIST_LEN:
@@ -311,13 +421,13 @@ class customBot5(Bot):
             dx = self.dx
             dy = self.dy
 
-            rand = random.randint(0,self.sideChance)
+            rand = random.randint(0,40)
             if rand == 0:
                 dx = -dx
                 self.noUp = True
-            # elif rand == 1:
-            #     dy = -dy
-            #     self.noUp = True
+            elif rand == 1:
+                dy = -dy
+                self.noUp = True
 
             self.momentum += -1
 

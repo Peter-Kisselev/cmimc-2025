@@ -5,7 +5,7 @@ import numpy as np
 import math
 
 # Simple bot that walks towards peaks, doesn't communicate other than saying its id
-class customBot5(Bot):
+class customBot7(Bot):
     DEBUG = True
 
     ### COPY BELOW THIS LINE TO AVOID DEBUG ERRORS ###
@@ -19,11 +19,14 @@ class customBot5(Bot):
 
     # Parameters (tweak by hand) but constant at runtime
     GRAD_SMOOTH = 2
-    EXPLORE = 350
     ESCAPE_MAX = 20
     HIST_LEN = 3
-    MIN_GRAD = 500
+    MIN_GRAD = 5
     MOMENTUM_MAX = 3
+
+    # Manhattan distance
+    def mDist(self, p1, p2) -> int:
+        return sum(abs(p1 - p2))
 
     def rTF(self) -> bool:
         return random.choice([True, False])
@@ -73,7 +76,16 @@ class customBot5(Bot):
         self.ESCAPE = 0
         self.posHist = [[0,0],[0,0]]
         self.momentum = 0
+
         self.sideChance = 10
+        self.newChance = 0
+
+        if difficulty == 0:
+            self.EXPLORE = 350
+        elif difficulty == 1:
+            self.EXPLORE = 250
+        elif difficulty == 2:
+            self.EXPLORE = 350
 
         # pick one direction based on index
         moves = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]]
@@ -89,6 +101,8 @@ class customBot5(Bot):
 
         self.slideCache = {}
 
+        self.gaps = []
+
     # wraparound
     def getTruePos(self, pos) -> np.ndarray[int, int]:
         return pos%self.GRID_SIZE
@@ -98,6 +112,10 @@ class customBot5(Bot):
         dx = ((pos[1] - origin[1] + self.GRID_SIZE//2) % self.GRID_SIZE) - self.GRID_SIZE//2
         dy = ((pos[0] - origin[0] + self.GRID_SIZE//2) % self.GRID_SIZE) - self.GRID_SIZE//2
         return np.array([dy, dx])
+
+    # Toroidal distance
+    def torDist(self, origin, p):
+        return self.mDist(origin, self.torusRelPos(origin, p))
 
     # Decode signed binary: if sign bit is 1, subtract 2^len(bits)
     def decodeSigned(self, bits: str) -> int:
@@ -233,8 +251,14 @@ class customBot5(Bot):
 
     # Detect moving into water and turn (pos is assumed to be after dy and dx appied)
     def avoidWater(self, pos):
+        safe = []
         level = self.TURN + 1
-        return self.cache[pos[0]][pos[1]] <= level
+        for dy, dx in self.directions:
+        # for dx, dy in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
+            newPos = self.getTruePos(np.add(pos,[dy,dx]))
+            if self.cache[newPos[0], newPos[1]] > level:
+                safe.append((dy, dx))
+        return safe
 
     # Go towards most unchecked
     def mostUnchecked(self, pos):
@@ -242,6 +266,7 @@ class customBot5(Bot):
         bestDir = (0, 0)
 
         for dx, dy in self.directions:
+        # for dx, dy in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
             newPos = np.add(pos, [dy, dx])
             counter = 0
 
@@ -267,23 +292,37 @@ class customBot5(Bot):
             self.updateCache(height)
 
         self.readNbrs(neighbors)
-        if self.bestPos[1] > 700:
-            self.sideChance = 30
+
+        if self.difficulty == 0:
+            if self.bestPos[1] > 700:
+                self.sideChance = self.newChance
+        elif self.difficulty == 1:
+            if self.bestPos[1] > 800:
+                self.sideChance = self.newChance
+        else:
+            if self.bestPos[1] > 950:
+                self.sideChance = self.newChance
+
+        # if self.TURN >= self.EXPLORE-50:
+        #     self.EXPLORE += -1*max(self.torDist(self.pos, self.bestPos[0])-20, 0)
 
         if self.momentum == 0:
             if self.TURN > self.EXPLORE:
+                self.momentum = 0
                 if self.bestPos[1] > self.cache[self.pos[0]][self.pos[1]]:
                     dely, delx = self.torusRelPos(self.pos, self.bestPos[0])
                     dx = sign(delx)
                     dy = sign(dely)
                 elif self.bestPos[1] == self.cache[self.pos[0]][self.pos[1]]:
-                    grad = self.contGrad(height)
-                    if sum(grad**2) > 2*self.MIN_GRAD:
-                        dy = sign(grad[0])
-                        dx = sign(grad[1])
-                    else:
+                    # grad = self.contGrad(height)
+                    # if sum(grad**2) > 200*self.MIN_GRAD:
+                    #     dy = sign(grad[0])
+                    #     dx = sign(grad[1])
+                    # else:
                         dx = 0
                         dy = 0
+                        self.dx = 0
+                        self.dy = 0
                 else:
                     dx = self.dx
                     dy = self.dy
@@ -302,11 +341,10 @@ class customBot5(Bot):
                     self.momentum = self.ESCAPE_MAX//2
                     if dy + dx == 0:
                         dx = 1
-                        dy = (2*int(self.rTF())-1)
+                        dy = 1
                         self.momentum = self.ESCAPE_MAX//2
                     # dy = -sign(grad[0])
                     # dx = -sign(grad[1])
-
         else:
             dx = self.dx
             dy = self.dy
@@ -321,6 +359,19 @@ class customBot5(Bot):
 
             self.momentum += -1
 
+        # If moving into water, simply turn around
+        available = self.avoidWater(self.pos)
+        if dy + dx != 0 and not((dy, dx) in available):
+            if available:
+                newDir = random.choice(available)
+            else:
+                newDir = (0, 0)
+            dx = newDir[1]
+            dy = newDir[0]
+            self.dx = dx
+            self.dy = dy
+            self.momentum = 30 if self.TURN <= self.EXPLORE else 20
+
         self.pos[1] += dx
         self.pos[0] += dy
         if not self.noUp:
@@ -328,22 +379,9 @@ class customBot5(Bot):
             self.dy = dy
         self.noUp = False
 
+        # if self.bestPos[1] == 953:
+
         self.pos = self.getTruePos(self.pos)
-
-        # if self.id == 10:
-        #     self.saveCache(self.cache)
-        #     print(self.cache[tuple(self.pos)])
-
-        # If moving into water, simply turn around
-        if self.avoidWater(self.pos):
-            dx = -dx
-            dy = -dy
-            self.dx = dx
-            self.dy = dy
-            self.momentum = 20 if self.TURN <= self.EXPLORE else 3
-            self.pos[1] += 2*dx
-            self.pos[0] += 2*dy
-            self.pos = self.getTruePos(self.pos)
 
         relPos = [self.torusRelPos(self.pos, self.bestPos[0]), self.bestPos[1]]
         m = self.packMsg(relPos)

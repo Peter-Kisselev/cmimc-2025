@@ -5,7 +5,7 @@ import numpy as np
 import math
 
 # Simple bot that walks towards peaks, doesn't communicate other than saying its id
-class customBot5(Bot):
+class customBot6(Bot):
     DEBUG = True
 
     ### COPY BELOW THIS LINE TO AVOID DEBUG ERRORS ###
@@ -233,8 +233,14 @@ class customBot5(Bot):
 
     # Detect moving into water and turn (pos is assumed to be after dy and dx appied)
     def avoidWater(self, pos):
+        safe = []
         level = self.TURN + 1
-        return self.cache[pos[0]][pos[1]] <= level
+        for dy, dx in self.directions:
+        # for dx, dy in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
+            newPos = self.getTruePos(np.add(pos,[dy,dx]))
+            if self.cache[newPos[0], newPos[1]] > level:
+                safe.append((dy, dx))
+        return safe
 
     # Go towards most unchecked
     def mostUnchecked(self, pos):
@@ -321,6 +327,19 @@ class customBot5(Bot):
 
             self.momentum += -1
 
+        # If moving into water, simply turn around
+        available = self.avoidWater(self.pos)
+        if dy + dx != 0 and not((dy, dx) in available):
+            if available:
+                newDir = random.choice(available)
+            else:
+                newDir = (0, 0)
+            dx = newDir[1]
+            dy = newDir[0]
+            self.dx = dx
+            self.dy = dy
+            self.momentum = 30 if self.TURN <= self.EXPLORE else 20
+
         self.pos[1] += dx
         self.pos[0] += dy
         if not self.noUp:
@@ -328,22 +347,9 @@ class customBot5(Bot):
             self.dy = dy
         self.noUp = False
 
+        # if self.bestPos[1] == 953:
+
         self.pos = self.getTruePos(self.pos)
-
-        # if self.id == 10:
-        #     self.saveCache(self.cache)
-        #     print(self.cache[tuple(self.pos)])
-
-        # If moving into water, simply turn around
-        if self.avoidWater(self.pos):
-            dx = -dx
-            dy = -dy
-            self.dx = dx
-            self.dy = dy
-            self.momentum = 20 if self.TURN <= self.EXPLORE else 3
-            self.pos[1] += 2*dx
-            self.pos[0] += 2*dy
-            self.pos = self.getTruePos(self.pos)
 
         relPos = [self.torusRelPos(self.pos, self.bestPos[0]), self.bestPos[1]]
         m = self.packMsg(relPos)

@@ -19,10 +19,10 @@ class SubmissionBot(Bot):
 
     # Parameters (tweak by hand) but constant at runtime
     GRAD_SMOOTH = 2
-    EXPLORE = 370
-    ESCAPE_MAX = 32
+    EXPLORE = 350
+    ESCAPE_MAX = 20
     HIST_LEN = 3
-    MIN_GRAD = 0.5
+    MIN_GRAD = 500
     MOMENTUM_MAX = 3
 
     def rTF(self) -> bool:
@@ -64,7 +64,7 @@ class SubmissionBot(Bot):
     # initialize class
     def __init__(self, index: int, difficulty: int):
 
-        self.index = index
+        self.id = index
         self.difficulty = difficulty
         self.cache = np.full((self.GRID_SIZE, self.GRID_SIZE), self.UNSEEN, dtype=float)
         self.pos = np.array([0, 0])
@@ -73,10 +73,21 @@ class SubmissionBot(Bot):
         self.ESCAPE = 0
         self.posHist = [[0,0],[0,0]]
         self.momentum = 0
+        self.sideChance = 10
 
         # pick one direction based on index
         moves = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]]
         self.dy, self.dx = moves[index % 8]
+
+        self.directions = [
+            (-1, -1), (-1, 0), (-1, 1),
+            (0, -1),          (0, 1),
+            (1, -1),  (1, 0), (1, 1)
+        ]
+
+        self.noUp = False
+
+        self.slideCache = {}
 
     # wraparound
     def getTruePos(self, pos) -> np.ndarray[int, int]:
@@ -146,6 +157,10 @@ class SubmissionBot(Bot):
 
     # Avoid hitting known values, get only new positions (n^2 -> 2n complexity)
     def slidingWindow(self, pos, dx, dy):
+        key = (int(pos[0]), int(pos[1]), dx, dy)
+        if key in self.slideCache:
+            return self.slideCache[key]
+
         half = self.VIEW
         x0_new = pos[1] - half  # cache origin x
         y0_new = pos[0] - half  # cache origin y
@@ -177,6 +192,8 @@ class SubmissionBot(Bot):
             return np.empty((0, 4), dtype=int)
         # Stack as [cache_y, cache_x, local_y, local_x]
         all_cells = np.vstack(bands)
+
+        self.slideCache[key] = all_cells
         return all_cells # allow duplicated corner when moving diagonally, performance cost is small
 
     # Update known values with new things and update best position
@@ -219,6 +236,26 @@ class SubmissionBot(Bot):
         level = self.TURN + 1
         return self.cache[pos[0]][pos[1]] <= level
 
+    # Go towards most unchecked
+    def mostUnchecked(self, pos):
+        maxCount = 0
+        bestDir = (0, 0)
+
+        for dx, dy in self.directions:
+            newPos = np.add(pos, [dy, dx])
+            counter = 0
+
+            for val in self.slidingWindow(newPos, self.dx, self.dy):
+                cache_pos = val[:2]
+                curPos = self.getTruePos(cache_pos)
+                p = self.cache[curPos[0]][curPos[1]]
+                if p == self.UNSEEN:
+                    counter += 1
+            if counter > maxCount:
+                maxCount = counter
+                bestDir = (dy, dx)
+        return bestDir
+
     # perform a step
     def step(self, height: np.ndarray, neighbors: List[Tuple[int, int, int]]) -> Tuple[int, int, int]:
         height = height.transpose()
@@ -230,12 +267,13 @@ class SubmissionBot(Bot):
             self.updateCache(height)
 
         self.readNbrs(neighbors)
+        if self.bestPos[1] > 700:
+            self.sideChance = 30
 
-        if self.TURN > self.EXPLORE:
-            if self.momentum == 0:
+        if self.momentum == 0:
+            if self.TURN > self.EXPLORE:
                 if self.bestPos[1] > self.cache[self.pos[0]][self.pos[1]]:
                     dely, delx = self.torusRelPos(self.pos, self.bestPos[0])
-
                     dx = sign(delx)
                     dy = sign(dely)
                 elif self.bestPos[1] == self.cache[self.pos[0]][self.pos[1]]:
@@ -250,11 +288,6 @@ class SubmissionBot(Bot):
                     dx = self.dx
                     dy = self.dy
             else:
-                dx = self.dx
-                dy = self.dy
-                self.momentum += -1
-        else:
-            if self.momentum == 0:
                 self.posHist.append(self.pos.copy())
                 if len(self.posHist) > self.HIST_LEN:
                     self.posHist.pop(0)
@@ -265,22 +298,39 @@ class SubmissionBot(Bot):
                     dx = sign(round(grad[1]))
                     self.momentum = self.MOMENTUM_MAX
                 else:
-                    self.momentum = self.ESCAPE_MAX
-                    dy = -sign(grad[0])
-                    dx = -sign(grad[1])
-            else:
-                dx = self.dx
-                dy = self.dy
-                self.momentum += -1
+                    dy, dx = self.mostUnchecked(self.pos)
+                    self.momentum = self.ESCAPE_MAX//2
+                    if dy + dx == 0:
+                        dx = 1
+                        dy = (2*int(self.rTF())-1)
+                        self.momentum = self.ESCAPE_MAX//2
+                    # dy = -sign(grad[0])
+                    # dx = -sign(grad[1])
+
+        else:
+            dx = self.dx
+            dy = self.dy
+
+            rand = random.randint(0,self.sideChance)
+            if rand == 0:
+                dx = -dx
+                self.noUp = True
+            # elif rand == 1:
+            #     dy = -dy
+            #     self.noUp = True
+
+            self.momentum += -1
 
         self.pos[1] += dx
         self.pos[0] += dy
-        self.dx = dx
-        self.dy = dy
+        if not self.noUp:
+            self.dx = dx
+            self.dy = dy
+        self.noUp = False
 
         self.pos = self.getTruePos(self.pos)
 
-        # if self.index == 10:
+        # if self.id == 10:
         #     self.saveCache(self.cache)
         #     print(self.cache[tuple(self.pos)])
 

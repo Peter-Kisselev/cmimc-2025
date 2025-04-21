@@ -299,18 +299,18 @@ class testBot(Bot):
                 current = forward_path[current]
                 path.append(current)
             path.reverse()
-            
+
             # Build backward path
             current = meeting_point
             while current in backward_path:
                 current = backward_path[current]
                 path.append(current)
-            
+
             # Extract first move
             if len(path) > 1:
                 first_move = path[1]  # path[0] is start position
                 return (first_move[0] - sx, first_move[1] - sy)
-        
+
         return None
 
     # perform a step

@@ -5,7 +5,7 @@ import numpy as np
 import math
 
 # Simple bot that walks towards peaks, doesn't communicate other than saying its id
-class customBot5(Bot):
+class customBot6(Bot):
     DEBUG = True
 
     ### COPY BELOW THIS LINE TO AVOID DEBUG ERRORS ###
@@ -18,12 +18,15 @@ class customBot5(Bot):
     UNSEEN = 1 if DEBUG else -10000
 
     # Parameters (tweak by hand) but constant at runtime
-    GRAD_SMOOTH = 2
-    EXPLORE = 350
+    GRAD_SMOOTH = 1
     ESCAPE_MAX = 20
     HIST_LEN = 3
-    MIN_GRAD = 500
+    MIN_GRAD = 2
     MOMENTUM_MAX = 3
+
+    # Manhattan distance
+    def mDist(self, p1, p2) -> int:
+        return sum(abs(p1 - p2))
 
     def rTF(self) -> bool:
         return random.choice([True, False])
@@ -74,6 +77,7 @@ class customBot5(Bot):
         self.posHist = [[0,0],[0,0]]
         self.momentum = 0
         self.sideChance = 10
+        self.newChance = 10
 
         # pick one direction based on index
         moves = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]]
@@ -84,6 +88,13 @@ class customBot5(Bot):
             (0, -1),          (0, 1),
             (1, -1),  (1, 0), (1, 1)
         ]
+
+        if difficulty == 0:
+            self.EXPLORE = 350
+        elif difficulty == 1:
+            self.EXPLORE = 250
+        elif difficulty == 2:
+            self.EXPLORE = 350
 
         self.noUp = False
 
@@ -98,6 +109,10 @@ class customBot5(Bot):
         dx = ((pos[1] - origin[1] + self.GRID_SIZE//2) % self.GRID_SIZE) - self.GRID_SIZE//2
         dy = ((pos[0] - origin[0] + self.GRID_SIZE//2) % self.GRID_SIZE) - self.GRID_SIZE//2
         return np.array([dy, dx])
+
+    # Toroidal distance
+    def torDist(self, origin, p):
+        return self.mDist(origin, self.torusRelPos(origin, p))
 
     # Decode signed binary: if sign bit is 1, subtract 2^len(bits)
     def decodeSigned(self, bits: str) -> int:
@@ -267,8 +282,25 @@ class customBot5(Bot):
             self.updateCache(height)
 
         self.readNbrs(neighbors)
-        if self.bestPos[1] > 700:
-            self.sideChance = 30
+
+        if self.difficulty == 0:
+            if self.bestPos[1] > 700:
+                self.sideChance = self.newChance
+                self.dx = -1
+                self.dy = 1
+        elif self.difficulty == 1:
+            if self.bestPos[1] > 850:
+                self.sideChance = self.newChance
+                self.dx = -1
+                self.dy = 1
+        else:
+            if self.bestPos[1] > 950:
+                self.sideChance = self.newChance
+                self.dx = -1
+                self.dy = 1
+
+        # if self.TURN >= self.EXPLORE-100:
+        #     self.EXPLORE += -1*max(self.torDist(self.pos, self.bestPos[0])-50, 0)
 
         if self.momentum == 0:
             if self.TURN > self.EXPLORE:
@@ -298,12 +330,12 @@ class customBot5(Bot):
                     dx = sign(round(grad[1]))
                     self.momentum = self.MOMENTUM_MAX
                 else:
-                    dy, dx = self.mostUnchecked(self.pos)
+                    # dy, dx = self.mostUnchecked(self.pos)
+                    # self.momentum = self.ESCAPE_MAX//2
+                    # if dy + dx == 0:
+                    dx = 1
+                    dy = 1
                     self.momentum = self.ESCAPE_MAX//2
-                    if dy + dx == 0:
-                        dx = 1
-                        dy = (2*int(self.rTF())-1)
-                        self.momentum = self.ESCAPE_MAX//2
                     # dy = -sign(grad[0])
                     # dx = -sign(grad[1])
 
